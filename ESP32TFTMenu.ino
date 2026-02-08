@@ -127,7 +127,11 @@ void setupTFT()
 void showSetupScreen() {
   tft.fillScreen(TFT_BLACK);
   File file = openSDFile("/HZK16");
+  if(!file){
+    Debug.Error("read HZK16 ERROR");
+  }
   displayChinese(file,20,20,GB.from("正在启动"),TFT_WHITE);
+  file.close();
 }
 
 void setupWifi() {
@@ -182,18 +186,50 @@ void syncNTPTime() {
 void setupWebServer() {
   server.on("/",HTTP_GET,[](AsyncWebServerRequest *request){
     File file = openSDFile("/index.html");
-    file.seek(0);
+    if(!file){
+      Debug.Warning("file not found.Request 404.");
+      request->send(404, "text/plain", "404 Not Found!");
+      return ;
+    }
     file.close();
     request->send(SD, "/index.html", "text/html");
+    
   });
   server.on("/PlanEdit/",HTTP_GET,[](AsyncWebServerRequest *request){
     File file = openSDFile("/PlanEdit.html");
-    file.seek(0);
+    if(!file){
+      Debug.Warning("file not found.Request 404.");
+      request->send(404, "text/plain", "404 Not Found!");
+      return ;
+    }
     file.close();
     request->send(SD, "/PlanEdit.html", "text/html");
   });
+  server.on("/AJAX/planList",HTTP_GET,[](AsyncWebServerRequest *request){
+    Debug.Info("Received a planList AJAX");
+    const String tag = request->header("X-Requested-With");
+    if(tag.isEmpty()){
+      Debug.Warning("AJAX does not have the head");
+      request->send(403,"text/plain","403 Forbidden!");
+    }else{
+      if(tag != "XMLHttpRequest"){
+        Debug.Warning("AJAX does not have the right head");
+        request->send(403,"text/plain","403 Forbidden!");
+      }else{
+        File file = openSDFile("/plans.json");
+        if(!file){
+          Debug.Warning("file not found.Request 404.");
+          request->send(404, "text/plain", "404 Not Found!");
+          return ;
+        }
+        file.close();
+        Debug.Info("AJAX is right.Send the request.");
+        request->send(SD, "/plans.json", "application/json");
+      }
+    }
+  });
   server.onNotFound([](AsyncWebServerRequest *request){
-    request->send(404, "text/plain", "404 Not Found:路径不存在!");
+    request->send(404, "text/plain", "404 Not Found!");
   });
   server.begin();
   Debug.Info("Web Server begin");
@@ -209,8 +245,7 @@ File openSDFile(String fileName){
   if (!file) {
     Debug.Error("File open ERROR");
     tft.println("File open ERROR");
-    while (1)
-      ;
+    return file;
   }
   Debug.Info("open SD file: " + fileName);
   return file;

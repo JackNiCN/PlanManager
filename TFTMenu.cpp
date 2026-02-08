@@ -25,5 +25,5 @@ bool TFTMenu::showMenu(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t colo
     for(int i = 1; i < itemsPerPage; i++){
         tft->drawLine(x, y + 20 * i, x + w, y + 20 * i, color);
     }
-
+    return true;
 }
