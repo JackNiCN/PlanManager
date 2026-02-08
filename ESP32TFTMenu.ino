@@ -5,6 +5,7 @@
 #include <Debuger.h>
 #include <ESP32Time.h>
 #include <ESPAsyncWebServer.h>
+#include <TFTMenu.h>
 const char* ssid = "vineky";
 const char* password = "springhappyo621";
 const int WifiConnectWaitLimit = 10; // times of 500ms delay
@@ -26,7 +27,7 @@ enum SystemState{
   Screensave,
   Normal,
   Menu
-}
+};
 
 void displayChinese(File& fontFile, int x, int y, String chStr, uint16_t color, bool noneBg = true, uint16_t bgcolor = TFT_BLACK);
 void setupTFT();
@@ -163,7 +164,7 @@ void syncNTPTime() {
   struct tm timeinfo; 
   int ntpRetry = 0;
   while (!getLocalTime(&timeinfo) && ntpRetry < ntpRetryLimit) {
-    Debug.Waring("NTP Sync Retry");
+    Debug.Warning("NTP Sync Retry");
     delay(500);
     ntpRetry++;
   }
@@ -184,6 +185,12 @@ void setupWebServer() {
     file.seek(0);
     file.close();
     request->send(SD, "/index.html", "text/html");
+  });
+  server.on("/PlanEdit/",HTTP_GET,[](AsyncWebServerRequest *request){
+    File file = openSDFile("/PlanEdit.html");
+    file.seek(0);
+    file.close();
+    request->send(SD, "/PlanEdit.html", "text/html");
   });
   server.onNotFound([](AsyncWebServerRequest *request){
     request->send(404, "text/plain", "404 Not Found:路径不存在!");

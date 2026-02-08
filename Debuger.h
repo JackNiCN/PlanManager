@@ -28,13 +28,13 @@ public:
             Serial.println("Error: "+data);
         }
     }
-    void Waring(String data, bool noEndline = false){
+    void Warning(String data, bool noEndline = false){
         if(noEndline){
-            Serial.print("Waring: "+data);
+            Serial.print("Warning: "+data);
         }else{
-            Serial.println("Waring: "+data);
+            Serial.println("Warning: "+data);
         }
     }
 };
-Debuger Debug;
+extern Debuger Debug;
 #endif

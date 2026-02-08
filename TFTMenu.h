@@ -18,6 +18,10 @@ namespace TFTMenuStruct
         bool (*drawStringFunction)(SplitChinese::TextUnit*, int, int);
         SplitChinese::TextUnit* textBuffer;
         int bufferCount;
+        ~MenuItem(){
+            delete[] this->textBuffer;
+            this->textBuffer = nullptr;
+        }
     };
 }
 
@@ -26,8 +30,12 @@ class TFTMenu
 private:
     TFT_eSPI *tft;
     TFTMenu() = delete;
-
+    TFTMenuStruct::MenuItem* itemList;
+    int itemCount = 0;
 public:
-    TFTMenu(TFT_eSPI *tftInstance);
+    TFTMenu(TFT_eSPI* tftInstance, int maxItemCount = 40);
+    ~TFTMenu();
+    void addItem(TFTMenuStruct::MenuItem&& item);
+    bool showMenu(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color, uint32_t bgColor);
 };
 #endif
