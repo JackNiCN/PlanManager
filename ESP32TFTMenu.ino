@@ -1,3 +1,6 @@
+#include <ArduinoJson.h>
+#include <ArduinoJson.hpp>
+
 #include <TFT_eSPI.h>
 #include <SD.h>
 #include <UTF8ToGB2312.h>
@@ -6,27 +9,34 @@
 #include <ESP32Time.h>
 #include <ESPAsyncWebServer.h>
 #include <TFTMenu.h>
+#include <ArduinoOTA.h>
 const char* ssid = "vineky";
 const char* password = "springhappyo621";
-const int WifiConnectWaitLimit = 10; // times of 500ms delay
+const int WifiConnectWaitLimit = 10;  // times of 500ms delay
 
-const long gmtOffset_sec = 8*3600;
+const long gmtOffset_sec = 8 * 3600;
 const int daylightOffset_sec = 0;
 const char* ntpServer = "ntp.aliyun.com";
 const int ntpRetryLimit = 3;
 unsigned long lastNtpSync = 0;
-const unsigned long NTP_SYNC_INTERVAL = 3600000; // 1 hour
+const unsigned long NTP_SYNC_INTERVAL = 3600000;  // 1 hour
 
 TFT_eSPI tft;
 ESP32Time rtc;
 AsyncWebServer server(80);
 
-enum SystemState{
+enum SystemState {
   Initialization,
   Error,
   Screensave,
   Normal,
   Menu
+};
+
+struct JsonRequestBody {
+  uint8_t* buffer = nullptr;
+  size_t totalSize = 0;
+  size_t receivedSize = 0;
 };
 
 void displayChinese(File& fontFile, int x, int y, String chStr, uint16_t color, bool noneBg = true, uint16_t bgcolor = TFT_BLACK);
@@ -36,23 +46,28 @@ void setupWifi();
 void setupSD();
 void syncNTPTime();
 void setupWebServer();
+void setupOTA();
+void keyboardLoop();
 File openSDFile(String fileName);
 void setup() {
   Serial.begin(115200);
   delay(1000);
+  Debug.Info("system start");
   setupTFT();
   setupSD();
   showSetupScreen();
   setupWifi();
+  //setupOTA();
   syncNTPTime();
   setupWebServer();
 }
 
 void loop() {
   if (millis() - lastNtpSync > NTP_SYNC_INTERVAL) {
-    syncNTPTime(); 
+    syncNTPTime();
     lastNtpSync = millis();
   }
+  keyboardLoop();
 }
 
 
@@ -83,14 +98,14 @@ void displayChinese(File& fontFile, int x, int y, String chStr, uint16_t color, 
     fontFile.read(dotMatrix, 32);  // 读取点阵数据
     // 4. 逐点渲染到ST7735屏幕
     for (int row = 0; row < 16; row++) {
-      uint8_t dotHigh = dotMatrix[row * 2];        // 该行高8位像素数据
-      uint8_t dotLow = dotMatrix[row * 2 + 1];     // 该行低8位像素数据
+      uint8_t dotHigh = dotMatrix[row * 2];     // 该行高8位像素数据
+      uint8_t dotLow = dotMatrix[row * 2 + 1];  // 该行低8位像素数据
 
       for (int col = 0; col < 16; col++) {
 
-        int charOffsetX = (i / 2) * 16; // 字符横向偏移
-        int charOffsetY = 0;            // 字符纵向偏移
-        
+        int charOffsetX = (i / 2) * 16;  // 字符横向偏移
+        int charOffsetY = 0;             // 字符纵向偏移
+
         uint16_t pixelX = x + charOffsetX + col, pixelY = y + charOffsetY + row;
 
         // 跳过屏幕范围外的像素（避免越界）
@@ -116,21 +131,20 @@ void displayChinese(File& fontFile, int x, int y, String chStr, uint16_t color, 
   }
 }
 
-void setupTFT()
-{
+void setupTFT() {
   tft.init();
   tft.setSwapBytes(true);
-  tft.setRotation(1); 
+  tft.setRotation(1);
   Debug.Info("TFT init over. ");
 }
 
 void showSetupScreen() {
   tft.fillScreen(TFT_BLACK);
   File file = openSDFile("/HZK16");
-  if(!file){
+  if (!file) {
     Debug.Error("read HZK16 ERROR");
   }
-  displayChinese(file,20,20,GB.from("正在启动"),TFT_WHITE);
+  displayChinese(file, 20, 20, GB.from("正在启动"), TFT_WHITE);
   file.close();
 }
 
@@ -138,24 +152,25 @@ void setupWifi() {
   WiFi.begin(ssid, password);
   Debug.Info("Connecting to WiFi");
   int WaitCount = 0;
-  while(WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.print(".");
     WaitCount++;
-    if(WaitCount > WifiConnectWaitLimit){
+    if (WaitCount > WifiConnectWaitLimit) {
       Debug.Error("WiFi connect timeout");
       tft.println("WiFi connect timeout");
-      while(1);
+      while (1)
+        ;
     }
   }
   Serial.print("\n");
   Debug.Debug("WiFi connected. IP address: " + WiFi.localIP().toString());
 }
 
-void setupSD(){
+void setupSD() {
   if (!SD.begin()) {
     Debug.Error("SD ERROR");
-    tft.drawString("SD ERROR",5,5);
+    tft.drawString("SD ERROR", 5, 5);
     while (1)
       ;
   }
@@ -165,7 +180,7 @@ void setupSD(){
 void syncNTPTime() {
   Debug.Info("Start syncing time");
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  struct tm timeinfo; 
+  struct tm timeinfo;
   int ntpRetry = 0;
   while (!getLocalTime(&timeinfo) && ntpRetry < ntpRetryLimit) {
     Debug.Warning("NTP Sync Retry");
@@ -174,65 +189,167 @@ void syncNTPTime() {
   }
   if (getLocalTime(&timeinfo)) {
     Debug.Info("NTP OK");
-    rtc.setTimeStruct(timeinfo); 
-    Debug.Debug("synced time: ",true);
+    rtc.setTimeStruct(timeinfo);
+    Debug.Debug("synced time: ", true);
     Debug.Debug(rtc.getTime("%Y-%m-%d %H:%M:%S"));
   } else {
     Debug.Error("NTP sync faild");
-    while (1) ;
+    while (1)
+      ;
   }
 }
 
 void setupWebServer() {
-  server.on("/",HTTP_GET,[](AsyncWebServerRequest *request){
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
     File file = openSDFile("/index.html");
-    if(!file){
-      Debug.Warning("file not found.Request 404.");
-      request->send(404, "text/plain", "404 Not Found!");
-      return ;
+    if (!file) {
+      Debug.Warning("file not found.Request 500.");
+      request->send(500, "text/plain", "500 Server ERROR!Connot Find and Open The index.html File in SD.");
+      return;
     }
     file.close();
     request->send(SD, "/index.html", "text/html");
-    
   });
-  server.on("/PlanEdit/",HTTP_GET,[](AsyncWebServerRequest *request){
+
+  server.on("/PlanEdit/", HTTP_GET, [](AsyncWebServerRequest* request) {
     File file = openSDFile("/PlanEdit.html");
-    if(!file){
-      Debug.Warning("file not found.Request 404.");
-      request->send(404, "text/plain", "404 Not Found!");
-      return ;
+    if (!file) {
+      Debug.Warning("file not found.Request 500.");
+      request->send(500, "text/plain", "500 Server ERROR!Connot Find and Open The PlanEdit.html File in SD.");
+      return;
     }
     file.close();
     request->send(SD, "/PlanEdit.html", "text/html");
   });
-  server.on("/AJAX/planList",HTTP_GET,[](AsyncWebServerRequest *request){
+
+  server.on("/AJAX/planList", HTTP_GET, [](AsyncWebServerRequest* request) {
     Debug.Info("Received a planList AJAX");
     const String tag = request->header("X-Requested-With");
-    if(tag.isEmpty()){
+    if (tag.isEmpty()) {
       Debug.Warning("AJAX does not have the head");
-      request->send(403,"text/plain","403 Forbidden!");
-    }else{
-      if(tag != "XMLHttpRequest"){
+      request->send(403, "text/plain", "403 Forbidden!");
+    } else {
+      if (tag != "XMLHttpRequest") {
         Debug.Warning("AJAX does not have the right head");
-        request->send(403,"text/plain","403 Forbidden!");
-      }else{
+        request->send(403, "text/plain", "403 Forbidden!");
+      } else {
         File file = openSDFile("/plans.json");
-        if(!file){
-          Debug.Warning("file not found.Request 404.");
-          request->send(404, "text/plain", "404 Not Found!");
-          return ;
+        if (!file) {
+          Debug.Warning("file not found.Request 500.");
+          request->send(500, "text/plain", "500 Server ERROR!Connot Find and Open The plans.json File in SD.");
+          return;
         }
         file.close();
         Debug.Info("AJAX is right.Send the request.");
-        request->send(SD, "/plans.json", "application/json");
+        request->send(SD, "/plans.json", "json");
       }
     }
   });
-  server.onNotFound([](AsyncWebServerRequest *request){
+
+  server.on(
+    "/AJAX/planList",
+    HTTP_POST,
+    [](AsyncWebServerRequest* request) {
+      
+      request->send(200,"application/json","{\"code\":200,\"massage\":\"ok\"}");
+      if (request->_tempObject != nullptr) {
+        free(((JsonRequestBody*)request->_tempObject)->buffer);
+        delete (JsonRequestBody*)request->_tempObject;
+        request->_tempObject = nullptr;
+      }
+    },
+    nullptr,
+    [](AsyncWebServerRequest* request,
+       uint8_t* data,  // ← 当前接收到的数据块指针
+       size_t len,     // ← 当前块的长度
+       size_t index,   // ← 当前块在整个body中的起始索引
+       size_t total) {
+      if (index == 0) {
+        auto* body = new JsonRequestBody();
+        body->buffer = (uint8_t*)malloc(total + 1);  // +1 用于结尾\0
+        body->totalSize = total;
+        body->receivedSize = 0;
+        request->_tempObject = body;
+      }
+
+      // 获取当前请求关联的缓冲区
+      auto* body = (JsonRequestBody*)request->_tempObject;
+      if (body && body->buffer) {
+        // 拼接当前数据块
+        memcpy(body->buffer + index, data, len);
+        body->receivedSize += len;
+      }
+
+      // 所有数据接收完毕，开始解析
+      if (index + len == total) {
+        if (body && body->buffer) {
+          body->buffer[total] = '\0';  // 确保字符串结束
+          DynamicJsonDocument doc(1024);
+
+          DeserializationError error = deserializeJson(doc, body->buffer, body->totalSize + 1);
+
+          if (error) {          
+            Debug.Warning(String("解析失败：") + String(error.c_str()));
+            return;
+          }
+
+        }
+      }
+    });
+
+  server.onNotFound([](AsyncWebServerRequest* request) {
     request->send(404, "text/plain", "404 Not Found!");
   });
   server.begin();
   Debug.Info("Web Server begin");
+}
+
+void setupOTA() {
+  ArduinoOTA
+    .onStart([]() {
+      String type;
+      if (ArduinoOTA.getCommand() == U_FLASH) {
+        type = "sketch";
+      } else {
+        type = "filesystem";
+      }
+
+      Serial.println("Start updating " + type);
+    })
+    .onEnd([]() {
+      Serial.println("\nEnd");
+      Serial.println("restart system");
+      esp_restart();
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) {
+        Serial.println("Auth Failed");
+      } else if (error == OTA_BEGIN_ERROR) {
+        Serial.println("Begin Failed");
+      } else if (error == OTA_CONNECT_ERROR) {
+        Serial.println("Connect Failed");
+      } else if (error == OTA_RECEIVE_ERROR) {
+        Serial.println("Receive Failed");
+      } else if (error == OTA_END_ERROR) {
+        Serial.println("End Failed");
+      }
+    });
+
+  ArduinoOTA.begin();
+}
+
+void keyboardLoop(){
+  int upAndDown = analogRead(35);
+  if(upAndDown > 2048){
+    Debug.Debug("Up Click");
+  }else if(upAndDown > 32 && upAndDown < 2048){
+    Debug.Debug("Down Click");
+  }
 }
 
 /**
@@ -240,7 +357,7 @@ void setupWebServer() {
  * @param fileName 文件名（包含路径）
  * @return 返回File对象
  */
-File openSDFile(String fileName){
+File openSDFile(String fileName) {
   File file = SD.open(fileName, FILE_READ);
   if (!file) {
     Debug.Error("File open ERROR");
