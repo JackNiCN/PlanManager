@@ -21,10 +21,7 @@ bool TFTMenu::showMenu(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t colo
     }
     Debug.Info("show menu");
     tft->fillRect(x, y, w, h, bgColor);
-    Debug.Debug("fill rect");
     tft->drawRect(x, y, w, h, color);
-    Debug.Debug("draw Rect");
-    delay(5000);
     int32_t itemsPerPage = h / 20; 
     if(itemsPerPage < 1){
         return false;
@@ -32,5 +29,8 @@ bool TFTMenu::showMenu(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t colo
     for(int i = 0; i < itemsPerPage; i++){
         tft->drawLine(x, y + 20 * i, x + w, y + 20 * i, color);
     }
+    return true;
+}
+bool defFunction(SplitChinese::TextUnit*, int, int, int){
     return true;
 }

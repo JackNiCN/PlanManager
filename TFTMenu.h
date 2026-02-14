@@ -13,7 +13,7 @@
 
 namespace TFTMenuStruct {
 struct MenuItem {
-  bool (*drawStringFunction)(SplitChinese::TextUnit*, int, int);
+  bool (*drawStringFunction)(SplitChinese::TextUnit*, int, int, int);
   SplitChinese::TextUnit* textBuffer;
   int bufferCount;
   ~MenuItem() {
@@ -22,6 +22,14 @@ struct MenuItem {
   }
 
   MenuItem(){
+    textBuffer = nullptr;
+    bufferCount = 0;
+  }
+
+  MenuItem(bool (*_drawStringFunction)(SplitChinese::TextUnit*, int, int, int) , String str)
+    :drawStringFunction(_drawStringFunction){
+      SplitChinese::SplitChinese chinese;
+      chinese.splitChineseAndASCII(str, this->textBuffer, this->bufferCount);
   }
 
   MenuItem(const MenuItem& other) {
@@ -53,6 +61,7 @@ private:
   TFTMenu() = delete;
   TFTMenuStruct::MenuItem* itemList;
   int itemCount = 0;
+  static bool defFunction(SplitChinese::TextUnit*, int, int, int);
 public:
   TFTMenu(TFT_eSPI* tftInstance, int maxItemCount = 40);
   ~TFTMenu();

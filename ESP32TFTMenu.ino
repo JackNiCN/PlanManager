@@ -1,6 +1,5 @@
 #include <ArduinoJson.h>
 #include <ArduinoJson.hpp>
-
 #include <TFT_eSPI.h>
 #include <SD.h>
 #include <UTF8ToGB2312.h>
@@ -20,6 +19,13 @@ const char* ntpServer = "ntp.aliyun.com";
 const int ntpRetryLimit = 3;
 unsigned long lastNtpSync = 0;
 const unsigned long NTP_SYNC_INTERVAL = 3600000;  // 1 hour
+
+int upButtonLastClickedTime = 0;
+int downButtonLastClickedTime = 0;
+int leftButtonLastClickedTime = 0;
+int rightButtonLastClickedTime = 0;
+int middleButtonLastClickedTime = 0;
+int mutButtonLastClickedTime = 0;
 
 TFT_eSPI tft;
 ESP32Time rtc;
@@ -49,6 +55,19 @@ void setupWebServer();
 void setupOTA();
 void keyboardLoop();
 File openSDFile(String fileName);
+bool createJson();
+bool drawMenuItem(SplitChinese::TextUnit* units, int count, int x, int y) {
+  for (int i = 0; i < count; i++) {
+    if (units[i].type == SplitChinese::CharType::TYPE_CHINESE) {
+      File file = openSDFile("/HZK16");
+      if (!file) {
+        return false;
+      }
+      displayChinese(file, x, y, GB.from(units[i].content), TFT_WHITE, true);
+      return true;
+    }
+  }
+}
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -60,6 +79,11 @@ void setup() {
   //setupOTA();
   syncNTPTime();
   setupWebServer();
+
+  TFTMenu menu(&tft, 10);
+  //menu.addItem(TFTMenuStruct::MenuItem(drawMenuItem,"hello"));
+  menu.showMenu(1, 1, 160, 127, TFT_WHITE, TFT_BLACK);
+  delay(1000);
 }
 
 void loop() {
@@ -251,8 +275,7 @@ void setupWebServer() {
     "/AJAX/planList",
     HTTP_POST,
     [](AsyncWebServerRequest* request) {
-      
-      request->send(200,"application/json","{\"code\":200,\"massage\":\"ok\"}");
+      request->send(200, "application/json", "{\"code\":200,\"massage\":\"ok\"}");
       if (request->_tempObject != nullptr) {
         free(((JsonRequestBody*)request->_tempObject)->buffer);
         delete (JsonRequestBody*)request->_tempObject;
@@ -265,6 +288,12 @@ void setupWebServer() {
        size_t len,     // ← 当前块的长度
        size_t index,   // ← 当前块在整个body中的起始索引
        size_t total) {
+      const String tag = request->header("X-Requested-With");
+      if (tag != "XMLHttpRequest") {
+        Debug.Warning("AJAX does not have the head");
+        request->send(403, "text/plain", "403 Forbidden!");
+        return;
+      }
       if (index == 0) {
         auto* body = new JsonRequestBody();
         body->buffer = (uint8_t*)malloc(total + 1);  // +1 用于结尾\0
@@ -285,18 +314,116 @@ void setupWebServer() {
       if (index + len == total) {
         if (body && body->buffer) {
           body->buffer[total] = '\0';  // 确保字符串结束
-          DynamicJsonDocument doc(1024);
+
+          if (!SD.exists("/plans.json")) {
+            createJson();
+          }
+
+          DynamicJsonDocument doc(512);
 
           DeserializationError error = deserializeJson(doc, body->buffer, body->totalSize + 1);
 
-          if (error) {          
+          if (error) {
             Debug.Warning(String("解析失败：") + String(error.c_str()));
             return;
           }
 
+          File jsonFile = SD.open("/plans.json", FILE_READ);
+          if (!jsonFile) {
+            Debug.Warning("file not open.Request 500.");
+            request->send(500, "text/plain", "500 Server ERROR!Connot Find and Open The plans.json File in SD.");
+            return;
+          }
+
+          size_t fileSize = jsonFile.size();
+
+          DynamicJsonDocument fileDoc(fileSize * 2);
+
+          DeserializationError error1 = deserializeJson(fileDoc, jsonFile);
+          jsonFile.close();
+          if (error1) {
+            Debug.Warning("解析JSON文件错误");
+            request->send(500, "text/plain", "500 Server ERROR.Connot deserializeJson");
+            return;
+          }
+
+          fileDoc["planList"].to<JsonArray>().add(doc);
+
+          jsonFile = SD.open("/plans.json", FILE_WRITE);
+          if (!jsonFile) {
+            Debug.Warning("file not open.Request 500.");
+            request->send(500, "text/plain", "500 Server ERROR!Connot Find and Open The plans.json File in SD.");
+            return;
+          }
+
+          serializeJsonPretty(fileDoc, jsonFile);
+
+          jsonFile.close();
         }
       }
     });
+
+  server.on("/AJAX/planList", HTTP_DELETE, [](AsyncWebServerRequest* request){
+    const String tag = request->header("X-Requested-With");
+    if (tag != "XMLHttpRequest") {
+      Debug.Warning("AJAX does not have the head");
+      request->send(403, "text/plain", "403 Forbidden!");
+      return;
+    }
+    if (request->hasParam("uuid")) {
+      const AsyncWebParameter* p = request->getParam("uuid");
+      File jsonFile = SD.open("/plans.json", FILE_READ);
+      if (!jsonFile) {
+        Debug.Warning("file not open.Request 500.");
+        request->send(500, "text/plain", "500 Server ERROR!Connot Find and Open The plans.json File in SD.");
+        return;
+      }
+
+      size_t fileSize = jsonFile.size();
+
+      DynamicJsonDocument fileDoc(fileSize * 2);
+
+      DeserializationError error1 = deserializeJson(fileDoc, jsonFile);
+      jsonFile.close();
+      if (error1) {
+        Debug.Warning("解析JSON文件错误");
+        request->send(500, "text/plain", "500 Server ERROR.Connot deserializeJson");
+        return;
+      }
+      auto array = fileDoc["planList"].to<JsonArray>();
+
+      int targetIndex = -1;
+
+      for (int i = 0; i < array.size(); i++) {
+        JsonVariant element = array[i];
+        if (element.is<JsonObject>() && element.containsKey("uuid")) {
+          String currentUuid = element["uuid"].as<String>();
+          if (currentUuid == p->value()) {
+            targetIndex = i;
+            break; 
+          }
+        }
+      }
+
+      if(targetIndex != -1){
+        array.remove(targetIndex);
+        jsonFile = SD.open("/plans.json", FILE_WRITE);
+          if (!jsonFile) {
+            Debug.Warning("file not open.Request 500.");
+            request->send(500, "text/plain", "500 Server ERROR!Connot Find and Open The plans.json File in SD.");
+            return;
+          }
+
+          serializeJsonPretty(fileDoc, jsonFile);
+
+          jsonFile.close();
+
+          request->send(200, "json", "{ code: 200, message: '计划删除成功' }");
+      }
+    } else {
+      request->send(400, "text/plain", "do not have the uuid");
+    }
+  });
 
   server.onNotFound([](AsyncWebServerRequest* request) {
     request->send(404, "text/plain", "404 Not Found!");
@@ -343,11 +470,12 @@ void setupOTA() {
   ArduinoOTA.begin();
 }
 
-void keyboardLoop(){
+void keyboardLoop() {
   int upAndDown = analogRead(35);
-  if(upAndDown > 2048){
+  if (upAndDown > 2048) {
+
     Debug.Debug("Up Click");
-  }else if(upAndDown > 32 && upAndDown < 2048){
+  } else if (upAndDown > 32 && upAndDown < 2048) {
     Debug.Debug("Down Click");
   }
 }
@@ -366,4 +494,17 @@ File openSDFile(String fileName) {
   }
   Debug.Info("open SD file: " + fileName);
   return file;
+}
+
+bool createJson() {
+  String templateStr = "";
+  File templateFile = SD.open("/template.json", FILE_READ);
+  while (templateFile.available()) {
+    templateStr += templateFile.read();
+  }
+  templateFile.close();
+  File file = SD.open("/plans.json", FILE_WRITE);
+  file.write((const uint8_t*)templateStr.c_str(), templateStr.length());
+  file.close();
+  return true;
 }
