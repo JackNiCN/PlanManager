@@ -10,62 +10,26 @@
 #include <Debuger.h>
 
 #include <SplitChinese.h>
+#include <TextWrite.h>
 
-namespace TFTMenuStruct {
-struct MenuItem {
-  bool (*drawStringFunction)(SplitChinese::TextUnit*, int, int, int);
-  SplitChinese::TextUnit* textBuffer;
-  int bufferCount;
-  ~MenuItem() {
-    delete[] this->textBuffer;
-    this->textBuffer = nullptr;
-  }
-
-  MenuItem(){
-    textBuffer = nullptr;
-    bufferCount = 0;
-  }
-
-  MenuItem(bool (*_drawStringFunction)(SplitChinese::TextUnit*, int, int, int) , String str)
-    :drawStringFunction(_drawStringFunction){
-      SplitChinese::SplitChinese chinese;
-      chinese.splitChineseAndASCII(str, this->textBuffer, this->bufferCount);
-  }
-
-  MenuItem(const MenuItem& other) {
-    this->drawStringFunction = other.drawStringFunction;
-    this->bufferCount = other.bufferCount;
-    this->textBuffer = new SplitChinese::TextUnit[other.bufferCount];
-    for (int i = 0; i < other.bufferCount; i++) {
-      this->textBuffer[i] = other.textBuffer[i];
-    }
-  }
-  // 重载赋值运算符
-  MenuItem& operator=(const MenuItem& other) {
-    if (this == &other) return *this;
-    delete[] this->textBuffer;
-    this->drawStringFunction = other.drawStringFunction;
-    this->bufferCount = other.bufferCount;
-    this->textBuffer = new SplitChinese::TextUnit[other.bufferCount];
-    for (int i = 0; i < other.bufferCount; i++) {
-      this->textBuffer[i] = other.textBuffer[i];
-    }
-    return *this;
-  }
-};
-}
 
 class TFTMenu {
 private:
   TFT_eSPI* tft;
   TFTMenu() = delete;
-  TFTMenuStruct::MenuItem* itemList;
+  String* itemList;
   int itemCount = 0;
-  static bool defFunction(SplitChinese::TextUnit*, int, int, int);
+  int pageCount = 0;
+  int height = 0;
+  int width = 0;
 public:
   TFTMenu(TFT_eSPI* tftInstance, int maxItemCount = 40);
   ~TFTMenu();
-  void addItem(TFTMenuStruct::MenuItem&& item);
-  bool showMenu(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color, uint32_t bgColor);
+  void addItem(String item);
+  void clearItemList();
+  int getPageCount() const{
+    return pageCount;
+  }
+  bool showMenu(int32_t x, int32_t y, int32_t w, int32_t h, int pageIndex, uint32_t color, uint32_t bgColor);
 };
 #endif
