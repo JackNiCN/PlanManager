@@ -63,7 +63,7 @@ void TextWrite::displayChinese(File &fontFile, int x, int y, String chStr, uint1
 
         uint16_t pixelX = x + charOffsetX + col, pixelY = y + charOffsetY + row;
 
-        if (pixelX >= TFT_WIDTH || pixelY >= TFT_HEIGHT)
+        if (pixelX >= TFT_HEIGHT || pixelY >= TFT_WIDTH)
           continue;
 
         bool isLight = false;

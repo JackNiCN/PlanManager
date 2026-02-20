@@ -90,6 +90,7 @@ bool createJson();
 SystemState sysState;
 bool isFirstRenderMainScreen = 1;
 unsigned long lastRSSIDraw = 0;
+unsigned long lastPlanCheck = 0;
 void renderTFT();
 void doRenderMain();
 int getSignalLevel(int rssi);
@@ -109,7 +110,7 @@ void setup() {
   syncNTPTime();
   setupWebServer();
 
-  
+
   menu.addItem("hello");
   menu.showMenu(1, 1, 159, 127, 1, TFT_WHITE, TFT_BLACK);
   delay(10000);
@@ -125,67 +126,6 @@ void loop() {
   keyboardLoop();
   renderTFT();
   delay(50);
-}
-
-/**
- * 中文绘制函数
- * @param fontFile 字库文件（HZK16）
- * @param x 起始X坐标
- * @param y 起始Y坐标
- * @param chStr GB2312编码的中文字符串
- * @param color 前景色
- * @param noneBg 是否不绘制背景色（true=不绘制背景色，false=绘制背景色）
- * @param bgcolor 背景色
- */
-void displayChinese(File &fontFile, int x, int y, String chStr, uint16_t color, bool noneBg, uint16_t bgcolor) {
-  int strLen = chStr.length();  // 字符串长度（每个中文占2字节，需成对处理）
-
-  for (int i = 0; i < strLen; i += 2) {  // 每次取2字节（1个中文字符）
-    // 1. 提取GB2312编码（区码=高字节，位码=低字节）
-    uint8_t codeHigh = chStr[i];     // 区码（GB2312编码高8位）
-    uint8_t codeLow = chStr[i + 1];  // 位码（GB2312编码低8位）
-
-    // 2. 计算字库偏移量（16x16点阵占32字节，GB2312从0xA1A1开始）
-    long offset = ((codeHigh - 0xA1) * 94 + (codeLow - 0xA1)) * 32;
-
-    // 3. 从SD卡读取32字节点阵数据
-    uint8_t dotMatrix[32];         // 存储16x16点阵（16行×2字节/行）
-    fontFile.seek(offset);         // 移动文件指针到目标位置
-    fontFile.read(dotMatrix, 32);  // 读取点阵数据
-    // 4. 逐点渲染到ST7735屏幕
-    for (int row = 0; row < 16; row++) {
-      uint8_t dotHigh = dotMatrix[row * 2];     // 该行高8位像素数据
-      uint8_t dotLow = dotMatrix[row * 2 + 1];  // 该行低8位像素数据
-
-      for (int col = 0; col < 16; col++) {
-
-        int charOffsetX = (i / 2) * 16;  // 字符横向偏移
-        int charOffsetY = 0;             // 字符纵向偏移
-
-        uint16_t pixelX = x + charOffsetX + col, pixelY = y + charOffsetY + row;
-
-        // 跳过屏幕范围外的像素（避免越界）
-        if (pixelX >= TFT_WIDTH || pixelY >= TFT_HEIGHT)
-          continue;
-
-        // 判断当前点是否点亮（1=亮，0=灭）
-        bool isLight = false;
-        if (col < 8) {  // 前8列对应高字节（从高位到低位）
-          isLight = (dotHigh & (0x80 >> col)) != 0;
-        } else {  // 后8列对应低字节
-          isLight = (dotLow & (0x80 >> (col - 8))) != 0;
-        }
-        // 点亮像素（亮则画目标颜色，灭则画黑色背景）
-        if (isLight) {
-          tft.drawPixel(pixelX, pixelY, color);
-        } else {
-          if (!noneBg) {
-            tft.drawPixel(pixelX, pixelY, bgcolor);
-          }
-        }
-      }
-    }
-  }
 }
 
 void setupTFT() {
@@ -400,18 +340,14 @@ void setupWebServer() {
       }
     });
 
-  server.on("/AJAX/planList/:uuid", HTTP_DELETE, [](AsyncWebServerRequest *request) {
+  server.on("/AJAX/planList", HTTP_DELETE, [](AsyncWebServerRequest *request) {
     const String tag = request->header("X-Requested-With");
     if (tag != "XMLHttpRequest") {
       Debug.Warning("AJAX does not have the head");
       request->send(403, "text/plain", "403 Forbidden!");
       return;
     }
-    if (!request->hasParam("uuid", true)) {
-      request->send(400, "application/json", "{\"error\":\"UUID参数不能为空\"}");
-      return;
-    }
-    String p = request->getParam("uuid", true)->value();
+    String p = "";
     File jsonFile = SD.open("/plans.json", FILE_READ);
     if (!jsonFile) {
       Debug.Warning("file not open.Request 500.");
@@ -423,21 +359,21 @@ void setupWebServer() {
     DeserializationError error1 = deserializeJson(fileDoc, jsonFile);
     jsonFile.close();
     if (error1) {
-        Debug.Warning("解析JSON文件错误");
-        request->send(500, "text/plain", "500 Server ERROR.Connot deserializeJson");
-        return;
+      Debug.Warning("解析JSON文件错误");
+      request->send(500, "text/plain", "500 Server ERROR.Connot deserializeJson");
+      return;
     }
     auto array = fileDoc["planList"].to<JsonArray>();
     int targetIndex = -1;
     for (int i = 0; i < array.size(); i++) {
-        JsonVariant element = array[i];
-        if (element.is<JsonObject>() && element.containsKey("uuid")) {
-          String currentUuid = element["uuid"].as<String>();
-          if (currentUuid == p) {
-            targetIndex = i;
-            break;
-          }
+      JsonVariant element = array[i];
+      if (element.is<JsonObject>() && element.containsKey("uuid")) {
+        String currentUuid = element["uuid"].as<String>();
+        if (currentUuid == p) {
+          targetIndex = i;
+          break;
         }
+      }
     }
     if (targetIndex != -1) {
       array.remove(targetIndex);
@@ -454,6 +390,8 @@ void setupWebServer() {
   });
 
   server.onNotFound([](AsyncWebServerRequest *request) {
+    Serial.printf("404错误 - 请求方法：%s，请求路径：%s\n", 
+    request->methodToString(), request->url().c_str());
     request->send(404, "text/plain", "404 Not Found!");
   });
   server.begin();
@@ -548,7 +486,7 @@ bool createJson() {
 void renderTFT() {
   if (sysState == SystemState::Normal) {
     doRenderMain();
-  }else{
+  } else {
     isFirstRenderMainScreen = false;
   }
 }
@@ -567,19 +505,37 @@ void doRenderMain() {
       tft.drawString("Connot open HZK16", 5, 24);
     }
     isFirstRenderMainScreen = false;
+    file.close();
   }
   time_t timestamp = rtc.getEpoch();
   struct tm *timeinfo = localtime(&timestamp);
   tft.setTextSize(1);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.drawString(String(timeinfo->tm_hour)+":"+String(timeinfo->tm_min), 1, 1);
+  tft.drawString(String(timeinfo->tm_hour) + ":" + String(timeinfo->tm_min), 1, 1);
 
-  auto plan = FindPlanbyTime(timestamp);
-  
-  if(plan.name == "fail"){
-    Debug.Warning("Get current plan faild");
+  if (millis() - lastPlanCheck > 30000) {
+    auto plan = FindPlanbyTime(timestamp);
+    if (plan.name == "fail") {
+      Debug.Warning("Get current plan faild");
+    } else if (plan.name == "unknow") {
+      File file = openSDFile("/HZK16");
+      if (file) {
+        Text.WriteText(file, "没有计划", 86, 24, TFT_WHITE);
+      } else {
+        Debug.Warning("File open Error");
+      }
+      file.close();
+    }else{
+      File file = openSDFile("/HZK16");
+      if (file) {
+        Text.WriteText(file, plan.name, 0, 40, TFT_WHITE);
+      } else {
+        Debug.Warning("File open Error");
+      }
+      file.close();
+    }
+    lastPlanCheck = millis();
   }
-
 
   if (millis() - lastRSSIDraw > 10000) {
     drawWiFiIcon(15, 160 - 12, getSignalLevel(WiFi.RSSI()));
@@ -602,7 +558,7 @@ int getSignalLevel(int rssi) {
 }
 
 void drawWiFiIcon(int x, int y, int level) {
-  tft.fillRect(y - 8, x - 10, 16, 20, TFT_BLACK);
+  tft.fillRect(y - 8, x - 10, 16, 16, TFT_BLACK);
   tft.fillCircle(y, x, 2, level > 0 ? TFT_BLUE : 0x39C4);
   if (level >= 1)
     tft.fillRect(y - 1, x - 2, 3, 2, TFT_BLUE);
@@ -630,7 +586,7 @@ PlanItem FindPlanbyTime(time_t time) {
   }
 
   size_t fileSize = jsonFile.size();
-  DynamicJsonDocument doc(fileSize * 2);
+  DynamicJsonDocument doc(fileSize * 4);
 
   DeserializationError error1 = deserializeJson(doc, jsonFile);
   jsonFile.close();
@@ -638,13 +594,19 @@ PlanItem FindPlanbyTime(time_t time) {
     Debug.Error("解析JSON文件错误");
     return { "fail", 0, 0, "fail", "fail" };
   }
-  auto array = doc["planList"].to<JsonArray>();
+  serializeJsonPretty(doc["planList"], Serial);
+  Debug.Debug(String(doc["planList"].size()));
+  for (int i = 0; i < doc["planList"].size(); i++) {
+    String dateS = doc["planList"][i]["date"].as<String>();
+    String bS = doc["planList"][i]["beginTime"].as<String>();
+    String eS = doc["planList"][i]["endTime"].as<String>();
+    Serial.printf("DEBUG plan[%d] date='%s' begin='%s' end='%s'\n", i, dateS.c_str(), bS.c_str(), eS.c_str());
 
-  for (int i = 0; i < array.size(); i++) {
-    time_t startTime = stringToTime(array[i]["date"].as<String>(), array[i]["beginTime"].as<String>());
-    time_t endTime = stringToTime(array[i]["date"].as<String>(), array[i]["endTime"].as<String>());
+    time_t startTime = stringToTime(dateS, bS);
+    time_t endTime = stringToTime(dateS, eS);
+    Serial.printf("PlanCheck:%ld-%ld curr:%ld\n", (long)startTime, (long)endTime, (long)time);
     if (time >= startTime && time <= endTime) {
-      return { array[i]["name"].as<String>(), startTime, endTime, array[i]["description"].as<String>(), array[i]["id"].as<String>() };
+      return { doc["planList"][i]["name"].as<String>(), startTime, endTime, doc["planList"][i]["description"].as<String>(), doc["planList"][i]["id"].as<String>() };
     }
   }
 
