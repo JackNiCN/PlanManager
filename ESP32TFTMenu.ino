@@ -324,7 +324,7 @@ void setupWebServer() {
             return;
           }
 
-          fileDoc["planList"].to<JsonArray>().add(doc);
+          fileDoc["planList"].as<JsonArray>().add(doc);
 
           jsonFile = SD.open("/plans.json", FILE_WRITE);
           if (!jsonFile) {
