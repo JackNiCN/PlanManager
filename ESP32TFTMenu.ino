@@ -347,7 +347,13 @@ void setupWebServer() {
       request->send(403, "text/plain", "403 Forbidden!");
       return;
     }
-    String p = "";
+    const String p = request->header("X-UUID-Data");
+    if (p == "") {
+      Debug.Warning("AJAX does not have uuid head");
+      request->send(403, "text/plain", "403 Forbidden!");
+      return;
+    }
+    Debug.Debug(p);
     File jsonFile = SD.open("/plans.json", FILE_READ);
     if (!jsonFile) {
       Debug.Warning("file not open.Request 500.");
@@ -385,8 +391,8 @@ void setupWebServer() {
       }
       serializeJsonPretty(fileDoc, jsonFile);
       jsonFile.close();
-      request->send(200, "json", "{ code: 200, message: '计划删除成功' }");
     }
+    request->send(200, "json", "{ code: 200, message: '计划删除成功' }");
   });
 
   server.onNotFound([](AsyncWebServerRequest *request) {
