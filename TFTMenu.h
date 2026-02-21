@@ -22,14 +22,19 @@ private:
   int pageCount = 0;
   int height = 0;
   int width = 0;
+  int currentItem = 0;
+  int x,y;
 public:
   TFTMenu(TFT_eSPI* tftInstance, int maxItemCount = 40);
   ~TFTMenu();
+  void setWindowPosition(int _x, int _y, int _w, int _h);
   void addItem(String item);
   void clearItemList();
   int getPageCount() const{
     return pageCount;
   }
-  bool showMenu(int32_t x, int32_t y, int32_t w, int32_t h, int pageIndex, uint32_t color, uint32_t bgColor);
+  void itemUp();
+  void itemDown();
+  bool showMenu(int pageIndex, uint32_t color, uint32_t bgColor);
 };
 #endif

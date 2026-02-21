@@ -88,11 +88,14 @@ File openSDFile(String fileName);
 bool createJson();
 
 SystemState sysState;
-bool isFirstRenderMainScreen = 1;
+bool isFirstRenderMainScreen = true;
+bool MenuChanged = true;
 unsigned long lastRSSIDraw = 0;
 unsigned long lastPlanCheck = 0;
 void renderTFT();
 void doRenderMain();
+void doRenderScreenSave();
+void doRenderMenu();
 int getSignalLevel(int rssi);
 void drawWiFiIcon(int x, int y, int level);
 PlanItem FindPlanbyTime(time_t);
@@ -110,10 +113,7 @@ void setup() {
   syncNTPTime();
   setupWebServer();
 
-
-  menu.addItem("hello");
-  menu.showMenu(1, 1, 159, 127, 1, TFT_WHITE, TFT_BLACK);
-  delay(10000);
+  menu.setWindowPosition(1, 1, 159, 127);
   sysState = SystemState::Normal;
 }
 
@@ -125,7 +125,7 @@ void loop() {
   ArduinoOTA.handle();
   keyboardLoop();
   renderTFT();
-  delay(50);
+  delay(100);
 }
 
 void setupTFT() {
@@ -155,7 +155,7 @@ void setupWifi() {
     Serial.print(".");
     WaitCount++;
     if (WaitCount > WifiConnectWaitLimit) {
-      Debug.Error("WiFi connect timeout");
+      Debug.Warning("WiFi connect timeout");
       tft.println("WiFi connect timeout");
       sysState = SystemState::Error;
       while (1)
@@ -336,6 +336,8 @@ void setupWebServer() {
           serializeJsonPretty(fileDoc, jsonFile);
 
           jsonFile.close();
+          MenuChanged = true;
+          lastPlanCheck = 0;
         }
       }
     });
@@ -369,20 +371,17 @@ void setupWebServer() {
       request->send(500, "text/plain", "500 Server ERROR.Connot deserializeJson");
       return;
     }
-    auto array = fileDoc["planList"].to<JsonArray>();
     int targetIndex = -1;
-    for (int i = 0; i < array.size(); i++) {
-      JsonVariant element = array[i];
-      if (element.is<JsonObject>() && element.containsKey("uuid")) {
-        String currentUuid = element["uuid"].as<String>();
-        if (currentUuid == p) {
-          targetIndex = i;
-          break;
-        }
-      }
+    for (int i = 0; i < fileDoc["planList"].size(); i++) {
+      String currentUuid = fileDoc["planList"][i]["id"].as<String>();
+      Debug.Debug(currentUuid);
+      if (currentUuid == p) {
+      targetIndex = i;
+      break;
+    }
     }
     if (targetIndex != -1) {
-      array.remove(targetIndex);
+      fileDoc["planList"].remove(targetIndex);
       jsonFile = SD.open("/plans.json", FILE_WRITE);
       if (!jsonFile) {
         Debug.Warning("file not open.Request 500.");
@@ -391,6 +390,8 @@ void setupWebServer() {
       }
       serializeJsonPretty(fileDoc, jsonFile);
       jsonFile.close();
+      MenuChanged = true;
+      lastPlanCheck = 0;
     }
     request->send(200, "json", "{ code: 200, message: '计划删除成功' }");
   });
@@ -446,17 +447,54 @@ void keyboardLoop() {
   int upAndDown = analogRead(35);
   if (upAndDown > 2048) {
     if (upButtonLastState == 0) {
+      upButtonLastState = 1;
       Debug.Debug("Up Click");
       buttonQueue.push(ButtonName::UP_BUTTON);
     }
   } else if (upAndDown > 32 && upAndDown < 2048) {
     if (downButtonLastState == 0) {
+      downButtonLastState = 1;
       Debug.Debug("Down Click");
       buttonQueue.push(ButtonName::DOWN_BUTTON);
     }
   } else {
     upButtonLastState = 0;
     downButtonLastState = 0;
+  }
+  int leftAndRight = analogRead(32);
+  if (leftAndRight > 2048) {
+    if (leftButtonLastState == 0) {
+      leftButtonLastState = 1;
+      Debug.Debug("Left Click");
+      buttonQueue.push(ButtonName::LEFT_BUTTON);
+    }
+  } else if (leftAndRight > 32 && leftAndRight < 2048) {
+    if (rightButtonLastState == 0) {
+      rightButtonLastState = 1;
+      Debug.Debug("Right Click");
+      buttonQueue.push(ButtonName::RIGHT_BUTTON);
+    }
+  } else {
+    leftButtonLastState = 0;
+    rightButtonLastState = 0;
+  }
+
+  int midAndExt = analogRead(34);
+  if (midAndExt > 2048) {
+    if (middleButtonLastState == 0) {
+      middleButtonLastState = 1;
+      Debug.Debug("Middle Click");
+      buttonQueue.push(ButtonName::MIDDLE_BUTTON);
+    }
+  } else if (midAndExt > 32 && midAndExt < 2048) {
+    if (extButtonLastState == 0) {
+      extButtonLastState = 1;
+      Debug.Debug("Ext Click");
+      buttonQueue.push(ButtonName::EXT_BUTTON);
+    }
+  } else {
+    middleButtonLastState = 0;
+    extButtonLastState = 0;
   }
 }
 
@@ -495,9 +533,22 @@ void renderTFT() {
   } else {
     isFirstRenderMainScreen = false;
   }
+  if(sysState == SystemState::Screensave){
+
+  }
+  if(sysState == SystemState::Menu){
+    doRenderMenu(); 
+  }
 }
 
 void doRenderMain() {
+  if(!buttonQueue.isEmpty()){
+    if(buttonQueue.pop() == ButtonName::EXT_BUTTON){
+      sysState = SystemState::Menu;
+      buttonQueue.clear();
+      MenuChanged = true;
+    }
+  }
   if (isFirstRenderMainScreen) {
     tft.fillScreen(TFT_BLACK);
     Text.setTFTClass(&tft);
@@ -515,12 +566,14 @@ void doRenderMain() {
   }
   time_t timestamp = rtc.getEpoch();
   struct tm *timeinfo = localtime(&timestamp);
-  tft.setTextSize(1);
+  tft.setTextSize(2);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.drawString(String(timeinfo->tm_hour) + ":" + String(timeinfo->tm_min), 1, 1);
+  tft.drawString((timeinfo->tm_hour < 10 ?"0" + String(timeinfo->tm_hour) : String(timeinfo->tm_hour)) + ":" + (timeinfo->tm_min < 10 ?"0" + String(timeinfo->tm_min) : String(timeinfo->tm_min)), 1, 1);
 
   if (millis() - lastPlanCheck > 30000) {
     auto plan = FindPlanbyTime(timestamp);
+    tft.fillRect(0, 40, 160, 16, TFT_BLACK);
+    tft.fillRect(86, 24, 80, 16, TFT_BLACK);
     if (plan.name == "fail") {
       Debug.Warning("Get current plan faild");
     } else if (plan.name == "unknow") {
@@ -547,6 +600,48 @@ void doRenderMain() {
     drawWiFiIcon(15, 160 - 12, getSignalLevel(WiFi.RSSI()));
     Debug.Debug(String(WiFi.RSSI()));
     lastRSSIDraw = millis();
+  }
+}
+
+void doRenderScreenSave(){
+
+}
+
+void doRenderMenu(){
+  if(!buttonQueue.isEmpty()){
+    if(buttonQueue.pop() == ButtonName::EXT_BUTTON){
+      sysState = SystemState::Normal;
+      isFirstRenderMainScreen = true;
+      lastPlanCheck = 0;
+      lastRSSIDraw = 0;
+      buttonQueue.clear();
+    }
+  }
+  if(MenuChanged){
+  menu.clearItemList();
+  File jsonFile = SD.open("/plans.json", FILE_READ);
+  if (!jsonFile) {
+    Debug.Error("file not open.Connot find plan.");
+  }
+
+  size_t fileSize = jsonFile.size();
+  DynamicJsonDocument doc(fileSize * 4);
+
+  DeserializationError error1 = deserializeJson(doc, jsonFile);
+  jsonFile.close();
+  if (error1) {
+    Debug.Error("解析JSON文件错误");
+    menu.addItem("解析JSON文件错误");
+  }
+  serializeJsonPretty(doc["planList"], Serial);
+  Debug.Debug(String(doc["planList"].size()));
+  for (int i = 0; i < doc["planList"].size(); i++) {
+    menu.addItem(doc["planList"][i]["name"]);
+  }
+  
+  
+    menu.showMenu(1, TFT_BLUE, TFT_BLACK);
+    MenuChanged = false;
   }
 }
 

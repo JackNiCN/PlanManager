@@ -10,6 +10,13 @@ TFTMenu::~TFTMenu(){
     delete[] itemList;
 }
 
+void TFTMenu::setWindowPosition(int _x, int _y, int _w, int _h){
+    x = _x;
+    y = _y;
+    width = _w;
+    height = _h;
+}
+
 void TFTMenu::addItem(String item){
     itemList[itemCount++] = item;
 }
@@ -18,22 +25,20 @@ void TFTMenu::clearItemList() {
     itemCount = 0;
 }
 
-bool TFTMenu::showMenu(int32_t x, int32_t y, int32_t w, int32_t h, int pageIndex, uint32_t color, uint32_t bgColor){
+bool TFTMenu::showMenu(int pageIndex, uint32_t color, uint32_t bgColor){
     if (tft == nullptr) {
         Debug.Error("TFT instance is null!");
         return false;
     }
-    height = h;
-    width = w;
     Debug.Info("show menu");
-    tft->fillRect(x, y, w, h, bgColor);
-    tft->drawRect(x, y, w, h, color);
-    int32_t itemsPerPage = h / 20; 
+    tft->fillRect(x, y, width, height, bgColor);
+    tft->drawRect(x, y, width, height, color);
+    int32_t itemsPerPage = height / 20; 
     if(itemsPerPage < 1){
         return false;
     }
     for(int i = 0; i < itemsPerPage; i++){
-        tft->drawLine(x, y + 20 * i, x + w, y + 20 * i, color);
+        tft->drawLine(x, y + 20 * i, x + width, y + 20 * i, color);
     }
     pageCount = itemCount / itemsPerPage;
     for(int i = (pageIndex - 1) * itemsPerPage, j = 0; i < pageIndex * itemsPerPage; i++,j++){
@@ -42,7 +47,22 @@ bool TFTMenu::showMenu(int32_t x, int32_t y, int32_t w, int32_t h, int pageIndex
         if(!fontFile){
             return false;
         }
-        Text.WriteText(fontFile, itemList[i], x + 2, y + 20 * i + 2, color, false, bgColor);
+        if(currentItem != j){
+            Text.WriteText(fontFile, itemList[i], x + 2, y + 20 * j + 2, color, false, bgColor);
+        }else{
+            tft->fillRect(x+1, y + 20 * j + 1, width - 2, 19, color);
+            Text.WriteText(fontFile, itemList[i], x + 2, y + 20 * j + 2, bgColor);
+        }
     }
     return true;
+}
+
+void TFTMenu::itemUp(){
+    int32_t itemsPerPage = height / 20;
+    currentItem = (currentItem + 1) % itemsPerPage;
+}
+
+void TFTMenu::itemDown(){
+    int32_t itemsPerPage = height / 20;
+    currentItem = (currentItem - 1 + itemsPerPage) % itemsPerPage;
 }
