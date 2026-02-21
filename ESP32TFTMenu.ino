@@ -593,6 +593,12 @@ void doRenderMain() {
       }
       file.close();
     }
+    struct tm *ST = localtime(&plan.startTime);
+    struct tm *ET = localtime(&plan.endTime);
+    String timeStr = (ST->tm_hour < 10 ?"0" + String(ST->tm_hour) : String(ST->tm_hour)) + ":" + (ST->tm_min < 10 ?"0" + String(ST->tm_min) : String(ST->tm_min));
+    timeStr += " - ";
+    timeStr += (ET->tm_hour < 10 ?"0" + String(ET->tm_hour) : String(ET->tm_hour)) + ":" + (ET->tm_min < 10 ?"0" + String(ET->tm_min) : String(ET->tm_min));
+    tft.drawString(timeStr, 1, 60);
     lastPlanCheck = millis();
   }
 
