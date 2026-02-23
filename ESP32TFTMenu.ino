@@ -108,6 +108,15 @@ void setup() {
   sysState = SystemState::Initialization;
   setupTFT();
   setupSD();
+
+  pinMode(22, OUTPUT);
+
+  digitalWrite(22, HIGH);
+  delay(100);
+  digitalWrite(22, LOW);
+  delay(1000);
+  digitalWrite(22, HIGH);
+
   showSetupScreen();
   setupWifi();
   setupOTA();
