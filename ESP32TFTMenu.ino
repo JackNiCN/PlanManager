@@ -15,14 +15,14 @@
 #include <CircularBuffer.hpp>
 const char *ssid = "vineky";
 const char *password = "springhappyo621";
-const int WifiConnectWaitLimit = 10; // times of 500ms delay
+const int WifiConnectWaitLimit = 10;  // times of 500ms delay
 
 const long gmtOffset_sec = 8 * 3600;
 const int daylightOffset_sec = 0;
 const char *ntpServer = "ntp.aliyun.com";
 const int ntpRetryLimit = 3;
 unsigned long lastNtpSync = 0;
-const unsigned long NTP_SYNC_INTERVAL = 3600000; // 1 hour
+const unsigned long NTP_SYNC_INTERVAL = 3600000;  // 1 hour
 
 int upButtonLastClickedTime = 0;
 int downButtonLastClickedTime = 0;
@@ -37,8 +37,7 @@ bool rightButtonLastState = 0;
 bool middleButtonLastState = 0;
 bool extButtonLastState = 0;
 
-enum ButtonName
-{
+enum ButtonName {
   UP_BUTTON,
   DOWN_BUTTON,
   LEFT_BUTTON,
@@ -54,8 +53,7 @@ ESP32Time rtc;
 AsyncWebServer server(80);
 TFTMenu menu(&tft, 50);
 
-enum SystemState
-{
+enum SystemState {
   Initialization,
   Error,
   Screensave,
@@ -63,15 +61,13 @@ enum SystemState
   Menu
 };
 
-struct JsonRequestBody
-{
+struct JsonRequestBody {
   uint8_t *buffer = nullptr;
   size_t totalSize = 0;
   size_t receivedSize = 0;
 };
 
-struct PlanItem
-{
+struct PlanItem {
   String name;
   time_t startTime;
   long durationMinutes;
@@ -105,8 +101,7 @@ int getSignalLevel(int rssi);
 void drawWiFiIcon(int x, int y, int level);
 PlanItem FindPlanbyTime(time_t);
 time_t stringToTime(const String &dateStr, const String &timeStr);
-void setup()
-{
+void setup() {
   Serial.begin(115200);
   delay(1000);
   Debug.Info("system start");
@@ -123,10 +118,8 @@ void setup()
   sysState = SystemState::Normal;
 }
 
-void loop()
-{
-  if (millis() - lastNtpSync > NTP_SYNC_INTERVAL)
-  {
+void loop() {
+  if (millis() - lastNtpSync > NTP_SYNC_INTERVAL) {
     syncNTPTime();
     lastNtpSync = millis();
   }
@@ -136,8 +129,7 @@ void loop()
   delay(100);
 }
 
-void setupTFT()
-{
+void setupTFT() {
   tft.init();
   tft.setSwapBytes(true);
   tft.setRotation(1);
@@ -145,30 +137,25 @@ void setupTFT()
   Debug.Info("TFT init over. ");
 }
 
-void showSetupScreen()
-{
+void showSetupScreen() {
   tft.fillScreen(TFT_BLACK);
   File file = openSDFile("/HZK16");
-  if (!file)
-  {
+  if (!file) {
     Debug.Error("read HZK16 ERROR");
   }
   Text.WriteText(file, "正在启动", 20, 20, TFT_WHITE);
   file.close();
 }
 
-void setupWifi()
-{
+void setupWifi() {
   WiFi.begin(ssid, password);
   Debug.Info("Connecting to WiFi");
   int WaitCount = 0;
-  while (WiFi.status() != WL_CONNECTED)
-  {
+  while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.print(".");
     WaitCount++;
-    if (WaitCount > WifiConnectWaitLimit)
-    {
+    if (WaitCount > WifiConnectWaitLimit) {
       Debug.Warning("WiFi connect timeout");
       tft.println("WiFi connect timeout");
       sysState = SystemState::Error;
@@ -180,10 +167,8 @@ void setupWifi()
   Debug.Debug("WiFi connected. IP address: " + WiFi.localIP().toString());
 }
 
-void setupSD()
-{
-  if (!SD.begin())
-  {
+void setupSD() {
+  if (!SD.begin()) {
     Debug.Error("SD ERROR");
     tft.drawString("SD ERROR", 5, 5);
     sysState = SystemState::Error;
@@ -193,27 +178,22 @@ void setupSD()
   Debug.Info("SD Ready");
 }
 
-void syncNTPTime()
-{
+void syncNTPTime() {
   Debug.Info("Start syncing time");
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   struct tm timeinfo;
   int ntpRetry = 0;
-  while (!getLocalTime(&timeinfo) && ntpRetry < ntpRetryLimit)
-  {
+  while (!getLocalTime(&timeinfo) && ntpRetry < ntpRetryLimit) {
     Debug.Warning("NTP Sync Retry");
     delay(500);
     ntpRetry++;
   }
-  if (getLocalTime(&timeinfo))
-  {
+  if (getLocalTime(&timeinfo)) {
     Debug.Info("NTP OK");
     rtc.setTimeStruct(timeinfo);
     Debug.Debug("synced time: ", true);
     Debug.Debug(rtc.getTime("%Y-%m-%d %H:%M:%S"));
-  }
-  else
-  {
+  } else {
     Debug.Error("NTP sync faild");
     sysState = SystemState::Error;
     while (1)
@@ -221,11 +201,9 @@ void syncNTPTime()
   }
 }
 
-void setupWebServer()
-{
+void setupWebServer() {
 
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     File file = openSDFile("/index.html");
     if (!file) {
       Debug.Warning("file not found.Request 500.");
@@ -233,10 +211,10 @@ void setupWebServer()
       return;
     }
     file.close();
-    request->send(SD, "/index.html", "text/html"); });
+    request->send(SD, "/index.html", "text/html");
+  });
 
-  server.on("/PlanEdit/", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
+  server.on("/PlanEdit/", HTTP_GET, [](AsyncWebServerRequest *request) {
     File file = openSDFile("/PlanEdit.html");
     if (!file) {
       Debug.Warning("file not found.Request 500.");
@@ -244,10 +222,10 @@ void setupWebServer()
       return;
     }
     file.close();
-    request->send(SD, "/PlanEdit.html", "text/html"); });
+    request->send(SD, "/PlanEdit.html", "text/html");
+  });
 
-  server.on("/AJAX/planList", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
+  server.on("/AJAX/planList", HTTP_GET, [](AsyncWebServerRequest *request) {
     Debug.Info("Received a planList AJAX");
     const String tag = request->header("X-Requested-With");
     if (tag.isEmpty()) {
@@ -268,117 +246,104 @@ void setupWebServer()
         Debug.Info("AJAX is right.Send the request.");
         request->send(SD, "/plans.json", "json");
       }
-    } });
+    }
+  });
 
   server.on(
-      "/AJAX/planList",
-      HTTP_POST,
-      [](AsyncWebServerRequest *request)
-      {
-        request->send(200, "application/json", "{\"code\":200,\"massage\":\"ok\"}");
-        if (request->_tempObject != nullptr)
-        {
-          free(((JsonRequestBody *)request->_tempObject)->buffer);
-          delete (JsonRequestBody *)request->_tempObject;
-          request->_tempObject = nullptr;
-        }
-      },
-      nullptr,
-      [](AsyncWebServerRequest *request,
-         uint8_t *data, // ← 当前接收到的数据块指针
-         size_t len,    // ← 当前块的长度
-         size_t index,  // ← 当前块在整个body中的起始索引
-         size_t total)
-      {
-        const String tag = request->header("X-Requested-With");
-        if (tag != "XMLHttpRequest")
-        {
-          Debug.Warning("AJAX does not have the head");
-          request->send(403, "text/plain", "403 Forbidden!");
-          return;
-        }
-        if (index == 0)
-        {
-          auto *body = new JsonRequestBody();
-          body->buffer = (uint8_t *)malloc(total + 1); // +1 用于结尾\0
-          body->totalSize = total;
-          body->receivedSize = 0;
-          request->_tempObject = body;
-        }
+    "/AJAX/planList",
+    HTTP_POST,
+    [](AsyncWebServerRequest *request) {
+      request->send(200, "application/json", "{\"code\":200,\"massage\":\"ok\"}");
+      if (request->_tempObject != nullptr) {
+        free(((JsonRequestBody *)request->_tempObject)->buffer);
+        delete (JsonRequestBody *)request->_tempObject;
+        request->_tempObject = nullptr;
+      }
+    },
+    nullptr,
+    [](AsyncWebServerRequest *request,
+       uint8_t *data,  // ← 当前接收到的数据块指针
+       size_t len,     // ← 当前块的长度
+       size_t index,   // ← 当前块在整个body中的起始索引
+       size_t total) {
+      const String tag = request->header("X-Requested-With");
+      if (tag != "XMLHttpRequest") {
+        Debug.Warning("AJAX does not have the head");
+        request->send(403, "text/plain", "403 Forbidden!");
+        return;
+      }
+      if (index == 0) {
+        auto *body = new JsonRequestBody();
+        body->buffer = (uint8_t *)malloc(total + 1);  // +1 用于结尾\0
+        body->totalSize = total;
+        body->receivedSize = 0;
+        request->_tempObject = body;
+      }
 
-        // 获取当前请求关联的缓冲区
-        auto *body = (JsonRequestBody *)request->_tempObject;
-        if (body && body->buffer)
-        {
-          // 拼接当前数据块
-          memcpy(body->buffer + index, data, len);
-          body->receivedSize += len;
-        }
+      // 获取当前请求关联的缓冲区
+      auto *body = (JsonRequestBody *)request->_tempObject;
+      if (body && body->buffer) {
+        // 拼接当前数据块
+        memcpy(body->buffer + index, data, len);
+        body->receivedSize += len;
+      }
 
-        // 所有数据接收完毕，开始解析
-        if (index + len == total)
-        {
-          if (body && body->buffer)
-          {
-            body->buffer[total] = '\0'; // 确保字符串结束
+      // 所有数据接收完毕，开始解析
+      if (index + len == total) {
+        if (body && body->buffer) {
+          body->buffer[total] = '\0';  // 确保字符串结束
 
-            if (!SD.exists("/plans.json"))
-            {
-              createJson();
-            }
-
-            DynamicJsonDocument doc(512);
-
-            DeserializationError error = deserializeJson(doc, body->buffer, body->totalSize + 1);
-
-            if (error)
-            {
-              Debug.Warning(String("解析失败：") + String(error.c_str()));
-              return;
-            }
-
-            File jsonFile = SD.open("/plans.json", FILE_READ);
-            if (!jsonFile)
-            {
-              Debug.Warning("file not open.Request 500.");
-              request->send(500, "text/plain", "500 Server ERROR!Connot Find and Open The plans.json File in SD.");
-              return;
-            }
-
-            size_t fileSize = jsonFile.size();
-
-            DynamicJsonDocument fileDoc(fileSize * 2);
-
-            DeserializationError error1 = deserializeJson(fileDoc, jsonFile);
-            jsonFile.close();
-            if (error1)
-            {
-              Debug.Warning("解析JSON文件错误");
-              request->send(500, "text/plain", "500 Server ERROR.Connot deserializeJson");
-              return;
-            }
-
-            fileDoc["planList"].as<JsonArray>().add(doc);
-
-            jsonFile = SD.open("/plans.json", FILE_WRITE);
-            if (!jsonFile)
-            {
-              Debug.Warning("file not open.Request 500.");
-              request->send(500, "text/plain", "500 Server ERROR!Connot Find and Open The plans.json File in SD.");
-              return;
-            }
-
-            serializeJsonPretty(fileDoc, jsonFile);
-
-            jsonFile.close();
-            MenuChanged = true;
-            lastPlanCheck = 0;
+          if (!SD.exists("/plans.json")) {
+            createJson();
           }
-        }
-      });
 
-  server.on("/AJAX/planList", HTTP_DELETE, [](AsyncWebServerRequest *request)
-            {
+          DynamicJsonDocument doc(512);
+
+          DeserializationError error = deserializeJson(doc, body->buffer, body->totalSize + 1);
+
+          if (error) {
+            Debug.Warning(String("解析失败：") + String(error.c_str()));
+            return;
+          }
+
+          File jsonFile = SD.open("/plans.json", FILE_READ);
+          if (!jsonFile) {
+            Debug.Warning("file not open.Request 500.");
+            request->send(500, "text/plain", "500 Server ERROR!Connot Find and Open The plans.json File in SD.");
+            return;
+          }
+
+          size_t fileSize = jsonFile.size();
+
+          DynamicJsonDocument fileDoc(fileSize * 2);
+
+          DeserializationError error1 = deserializeJson(fileDoc, jsonFile);
+          jsonFile.close();
+          if (error1) {
+            Debug.Warning("解析JSON文件错误");
+            request->send(500, "text/plain", "500 Server ERROR.Connot deserializeJson");
+            return;
+          }
+
+          fileDoc["planList"].as<JsonArray>().add(doc);
+
+          jsonFile = SD.open("/plans.json", FILE_WRITE);
+          if (!jsonFile) {
+            Debug.Warning("file not open.Request 500.");
+            request->send(500, "text/plain", "500 Server ERROR!Connot Find and Open The plans.json File in SD.");
+            return;
+          }
+
+          serializeJsonPretty(fileDoc, jsonFile);
+
+          jsonFile.close();
+          MenuChanged = true;
+          lastPlanCheck = 0;
+        }
+      }
+    });
+
+  server.on("/AJAX/planList", HTTP_DELETE, [](AsyncWebServerRequest *request) {
     const String tag = request->header("X-Requested-With");
     if (tag != "XMLHttpRequest") {
       Debug.Warning("AJAX does not have the head");
@@ -412,9 +377,9 @@ void setupWebServer()
       String currentUuid = fileDoc["planList"][i]["id"].as<String>();
       Debug.Debug(currentUuid);
       if (currentUuid == p) {
-      targetIndex = i;
-      break;
-    }
+        targetIndex = i;
+        break;
+      }
     }
     if (targetIndex != -1) {
       fileDoc["planList"].remove(targetIndex);
@@ -429,22 +394,21 @@ void setupWebServer()
       MenuChanged = true;
       lastPlanCheck = 0;
     }
-    request->send(200, "json", "{ code: 200, message: '计划删除成功' }"); });
+    request->send(200, "json", "{ code: 200, message: '计划删除成功' }");
+  });
 
-  server.onNotFound([](AsyncWebServerRequest *request)
-                    {
-    Serial.printf("404错误 - 请求方法：%s，请求路径：%s\n", 
-    request->methodToString(), request->url().c_str());
-    request->send(404, "text/plain", "404 Not Found!"); });
+  server.onNotFound([](AsyncWebServerRequest *request) {
+    Serial.printf("404错误 - 请求方法：%s，请求路径：%s\n",
+                  request->methodToString(), request->url().c_str());
+    request->send(404, "text/plain", "404 Not Found!");
+  });
   server.begin();
   Debug.Info("Web Server begin");
 }
 
-void setupOTA()
-{
+void setupOTA() {
   ArduinoOTA
-      .onStart([]()
-               {
+    .onStart([]() {
       String type;
       if (ArduinoOTA.getCommand() == U_FLASH) {
         type = "sketch";
@@ -452,16 +416,17 @@ void setupOTA()
         type = "filesystem";
       }
 
-      Serial.println("Start updating " + type); })
-      .onEnd([]()
-             {
+      Serial.println("Start updating " + type);
+    })
+    .onEnd([]() {
       Serial.println("\nEnd");
       Serial.println("restart system");
-      esp_restart(); })
-      .onProgress([](unsigned int progress, unsigned int total)
-                  { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); })
-      .onError([](ota_error_t error)
-               {
+      esp_restart();
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    })
+    .onError([](ota_error_t error) {
       Serial.printf("Error[%u]: ", error);
       if (error == OTA_AUTH_ERROR) {
         Serial.println("Auth Failed");
@@ -473,83 +438,62 @@ void setupOTA()
         Serial.println("Receive Failed");
       } else if (error == OTA_END_ERROR) {
         Serial.println("End Failed");
-      } });
+      }
+    });
 
   ArduinoOTA.begin();
 }
 
-void keyboardLoop()
-{
+void keyboardLoop() {
   int upAndDown = analogRead(35);
-  if (upAndDown > 2048)
-  {
-    if (upButtonLastState == 0)
-    {
+  if (upAndDown > 2048) {
+    if (upButtonLastState == 0) {
       upButtonLastState = 1;
       Debug.Debug("Up Click");
       buttonQueue.push(ButtonName::UP_BUTTON);
     }
-  }
-  else if (upAndDown > 32 && upAndDown < 2048)
-  {
-    if (downButtonLastState == 0)
-    {
+  } else if (upAndDown > 32 && upAndDown < 2048) {
+    if (downButtonLastState == 0) {
       downButtonLastState = 1;
       Debug.Debug("Down Click");
       buttonQueue.push(ButtonName::DOWN_BUTTON);
     }
-  }
-  else
-  {
+  } else {
     upButtonLastState = 0;
     downButtonLastState = 0;
   }
   int leftAndRight = analogRead(32);
-  if (leftAndRight > 2048)
-  {
-    if (leftButtonLastState == 0)
-    {
+  if (leftAndRight > 2048) {
+    if (leftButtonLastState == 0) {
       leftButtonLastState = 1;
       Debug.Debug("Left Click");
       buttonQueue.push(ButtonName::LEFT_BUTTON);
     }
-  }
-  else if (leftAndRight > 32 && leftAndRight < 2048)
-  {
-    if (rightButtonLastState == 0)
-    {
+  } else if (leftAndRight > 32 && leftAndRight < 2048) {
+    if (rightButtonLastState == 0) {
       rightButtonLastState = 1;
       Debug.Debug("Right Click");
       buttonQueue.push(ButtonName::RIGHT_BUTTON);
     }
-  }
-  else
-  {
+  } else {
     leftButtonLastState = 0;
     rightButtonLastState = 0;
   }
 
   int midAndExt = analogRead(34);
-  if (midAndExt > 2048)
-  {
-    if (middleButtonLastState == 0)
-    {
+  if (midAndExt > 2048) {
+    if (middleButtonLastState == 0) {
       middleButtonLastState = 1;
       Debug.Debug("Middle Click");
       buttonQueue.push(ButtonName::MIDDLE_BUTTON);
     }
-  }
-  else if (midAndExt > 32 && midAndExt < 2048)
-  {
-    if (extButtonLastState == 0)
-    {
+  } else if (midAndExt > 32 && midAndExt < 2048) {
+    if (extButtonLastState == 0) {
       extButtonLastState = 1;
       Debug.Debug("Ext Click");
       buttonQueue.push(ButtonName::EXT_BUTTON);
     }
-  }
-  else
-  {
+  } else {
     middleButtonLastState = 0;
     extButtonLastState = 0;
   }
@@ -560,11 +504,9 @@ void keyboardLoop()
  * @param fileName 文件名（包含路径）
  * @return 返回File对象
  */
-File openSDFile(String fileName)
-{
+File openSDFile(String fileName) {
   File file = SD.open(fileName, FILE_READ);
-  if (!file)
-  {
+  if (!file) {
     Debug.Error("File open ERROR");
     tft.println("File open ERROR");
     return file;
@@ -573,12 +515,10 @@ File openSDFile(String fileName)
   return file;
 }
 
-bool createJson()
-{
+bool createJson() {
   String templateStr = "";
   File templateFile = SD.open("/template.json", FILE_READ);
-  while (templateFile.available())
-  {
+  while (templateFile.available()) {
     templateStr += templateFile.read();
   }
   templateFile.close();
@@ -588,19 +528,14 @@ bool createJson()
   return true;
 }
 
-void renderTFT()
-{
-  if (sysState == SystemState::Normal)
-  {
+void renderTFT() {
+  if (sysState == SystemState::Normal) {
     doRenderMain();
-  }
-  else
-  {
+  } else {
     isFirstRenderMainScreen = false;
   }
-  if (sysState == SystemState::Screensave)
-  {
-    if (!buttonQueue.isEmpty()){
+  if (sysState == SystemState::Screensave) {
+    if (!buttonQueue.isEmpty()) {
       buttonQueue.clear();
       sysState = SystemState::Normal;
       isFirstRenderMainScreen = true;
@@ -609,36 +544,28 @@ void renderTFT()
       return;
     }
   }
-  if (sysState == SystemState::Menu)
-  {
+  if (sysState == SystemState::Menu) {
     doRenderMenu();
   }
 }
 
-void doRenderMain()
-{
-  if (!buttonQueue.isEmpty())
-  {
-    if (buttonQueue.pop() == ButtonName::EXT_BUTTON)
-    {
+void doRenderMain() {
+  if (!buttonQueue.isEmpty()) {
+    if (buttonQueue.pop() == ButtonName::EXT_BUTTON) {
       sysState = SystemState::Menu;
       buttonQueue.clear();
       MenuChanged = true;
     }
   }
-  if (isFirstRenderMainScreen)
-  {
+  if (isFirstRenderMainScreen) {
     tft.fillScreen(TFT_BLACK);
     Text.setTFTClass(&tft);
     File file = openSDFile("/HZK16");
-    if (file)
-    {
+    if (file) {
       Text.displayChinese(file, 2, 24, GB.get("当前计划："), TFT_WHITE, false, TFT_BLACK);
       file.close();
       tft.drawLine(0, 22, 160, 22, TFT_WHITE);
-    }
-    else
-    {
+    } else {
       tft.setTextColor(TFT_RED, TFT_BLACK);
       tft.drawString("Connot open HZK16", 5, 24);
     }
@@ -659,36 +586,25 @@ void doRenderMain()
 
     tft.fillRect(0, 40, 160, 16, TFT_BLACK);
     tft.fillRect(86, 24, 80, 16, TFT_BLACK);
-    if (plan.name == "fail")
-    {
+    if (plan.name == "fail") {
       Debug.Warning("Get current plan faild");
-    }
-    else if (plan.name == "unknow")
-    {
+    } else if (plan.name == "unknow") {
       File file = openSDFile("/HZK16");
-      if (file)
-      {
+      if (file) {
         Text.WriteText(file, "没有计划", 86, 24, TFT_WHITE);
-      }
-      else
-      {
+      } else {
         Debug.Warning("File open Error");
       }
       file.close();
-    }
-    else
-    {
+    } else {
       {
         File file = openSDFile("/HZK16");
-      if (file)
-      {
-        Text.WriteText(file, plan.name, 0, 40, TFT_WHITE);
-      }
-      else
-      {
-        Debug.Warning("File open Error");
-      }
-      file.close();
+        if (file) {
+          Text.WriteText(file, plan.name, 0, 40, TFT_WHITE);
+        } else {
+          Debug.Warning("File open Error");
+        }
+        file.close();
       }
       struct tm STbuf;
       struct tm ETbuf;
@@ -713,54 +629,52 @@ void doRenderMain()
       tft.drawString(timeStr, 1, 60);
       tft.fillRect(1, 76, 16, 159, TFT_BLACK);
       File file = openSDFile("/HZK16");
-      if (file)
-      {
-       Text.WriteText(file, "时长:" + String(plan.durationMinutes), 1, 76, TFT_WHITE);
-      }
-      else
-      {
+      if (file) {
+        Text.WriteText(file, "时长:" + String(plan.durationMinutes), 1, 76, TFT_WHITE);
+      } else {
         Debug.Warning("File open Error");
       }
       file.close();
     }
   }
 
-  if (millis() - lastRSSIDraw > 10000 || lastRSSIDraw == 0)
-  {
+  if (millis() - lastRSSIDraw > 10000 || lastRSSIDraw == 0) {
     drawWiFiIcon(15, 160 - 12, getSignalLevel(WiFi.RSSI()));
     Debug.Debug(String(WiFi.RSSI()));
     lastRSSIDraw = millis();
   }
 }
 
-void doRenderScreenSave()
-{
+void doRenderScreenSave() {
 }
 
-void doRenderMenu()
-{
-  if (!buttonQueue.isEmpty() && buttonQueue.pop() == ButtonName::EXT_BUTTON)
-  {
-    sysState = SystemState::Normal;
-    isFirstRenderMainScreen = true;
-    lastPlanCheck = 0;
-    lastRSSIDraw = 0;
-    buttonQueue.clear();
+void doRenderMenu() {
+
+  if (!buttonQueue.isEmpty()) {
+    ButtonName currentButton = buttonQueue.pop();
+
+
+    if (currentButton == ButtonName::EXT_BUTTON) {
+      sysState = SystemState::Normal;
+      isFirstRenderMainScreen = true;
+      lastPlanCheck = 0;
+      lastRSSIDraw = 0;
+      lastTimeStr = "";
+      buttonQueue.clear();
+    }
+    if (currentButton == ButtonName::UP_BUTTON) {
+      menu.itemUp();
+      MenuChanged = true;
+    }
+    if (currentButton == ButtonName::DOWN_BUTTON) {
+      menu.itemDown();
+      MenuChanged = true;
+    }
   }
-  if(!buttonQueue.isEmpty() && buttonQueue.pop() == ButtonName::UP_BUTTON){
-    menu.itemUp();
-    MenuChanged = true;
-  }
-  if(!buttonQueue.isEmpty() && buttonQueue.pop() == ButtonName::DOWN_BUTTON){
-    menu.itemDown();
-    MenuChanged = true;
-  }
-  if (MenuChanged)
-  {
+  if (MenuChanged) {
     menu.clearItemList();
     File jsonFile = SD.open("/plans.json", FILE_READ);
-    if (!jsonFile)
-    {
+    if (!jsonFile) {
       Debug.Error("file not open.Connot find plan.");
     }
 
@@ -769,15 +683,13 @@ void doRenderMenu()
 
     DeserializationError error1 = deserializeJson(doc, jsonFile);
     jsonFile.close();
-    if (error1)
-    {
+    if (error1) {
       Debug.Error("解析JSON文件错误");
       menu.addItem("解析JSON文件错误");
     }
     serializeJsonPretty(doc["planList"], Serial);
     Debug.Debug(String(doc["planList"].size()));
-    for (int i = 0; i < doc["planList"].size(); i++)
-    {
+    for (int i = 0; i < doc["planList"].size(); i++) {
       menu.addItem(doc["planList"][i]["name"]);
     }
 
@@ -786,8 +698,7 @@ void doRenderMenu()
   }
 }
 
-int getSignalLevel(int rssi)
-{
+int getSignalLevel(int rssi) {
   if (rssi >= -50)
     return 4;
   else if (rssi >= -60)
@@ -800,8 +711,7 @@ int getSignalLevel(int rssi)
     return 0;
 }
 
-void drawWiFiIcon(int x, int y, int level)
-{
+void drawWiFiIcon(int x, int y, int level) {
   tft.fillRect(y - 8, x - 10, 16, 16, TFT_BLACK);
   tft.fillCircle(y, x, 2, level > 0 ? TFT_BLUE : 0x39C4);
   if (level >= 1)
@@ -822,13 +732,11 @@ void drawWiFiIcon(int x, int y, int level)
     tft.drawRect(y - 6, x - 11, 12, 2, 0x39C4);
 }
 
-PlanItem FindPlanbyTime(time_t time)
-{
+PlanItem FindPlanbyTime(time_t time) {
   File jsonFile = SD.open("/plans.json", FILE_READ);
-  if (!jsonFile)
-  {
+  if (!jsonFile) {
     Debug.Error("file not open.Connot find plan.");
-    return {"fail", 0, 0, 0, "fail", "fail"};
+    return { "fail", 0, 0, 0, "fail", "fail" };
   }
 
   size_t fileSize = jsonFile.size();
@@ -836,15 +744,13 @@ PlanItem FindPlanbyTime(time_t time)
 
   DeserializationError error1 = deserializeJson(doc, jsonFile);
   jsonFile.close();
-  if (error1)
-  {
+  if (error1) {
     Debug.Error("解析JSON文件错误");
-    return {"fail", 0, 0, 0, "fail", "fail"};
+    return { "fail", 0, 0, 0, "fail", "fail" };
   }
   serializeJsonPretty(doc["planList"], Serial);
   Debug.Debug(String(doc["planList"].size()));
-  for (int i = 0; i < doc["planList"].size(); i++)
-  {
+  for (int i = 0; i < doc["planList"].size(); i++) {
     String dateS = doc["planList"][i]["date"].as<String>();
     String bS = doc["planList"][i]["beginTime"].as<String>();
     String eS = doc["planList"][i]["endTime"].as<String>();
@@ -854,17 +760,15 @@ PlanItem FindPlanbyTime(time_t time)
     time_t endTime = stringToTime(dateS, eS);
     long durationMinutes = doc["planList"][i]["durationMinutes"].as<long>();
     Serial.printf("PlanCheck:%ld-%ld curr:%ld\n", (long)startTime, (long)endTime, (long)time);
-    if (time >= startTime && time <= endTime)
-    {
-      return {doc["planList"][i]["name"].as<String>(), startTime, durationMinutes, endTime, doc["planList"][i]["description"].as<String>(), doc["planList"][i]["id"].as<String>()};
+    if (time >= startTime && time <= endTime) {
+      return { doc["planList"][i]["name"].as<String>(), startTime, durationMinutes, endTime, doc["planList"][i]["description"].as<String>(), doc["planList"][i]["id"].as<String>() };
     }
   }
 
-  return {"unknow", 0, 0, 0, "unknow", "unknow"};
+  return { "unknow", 0, 0, 0, "unknow", "unknow" };
 }
 
-time_t stringToTime(const String &dateStr, const String &timeStr)
-{
+time_t stringToTime(const String &dateStr, const String &timeStr) {
   // 1. 解析日期字符串 YYYY-MM-DD
   int year = dateStr.substring(0, 4).toInt();
   int month = dateStr.substring(5, 7).toInt();
@@ -873,31 +777,29 @@ time_t stringToTime(const String &dateStr, const String &timeStr)
   // 2. 解析时间字符串 HH:MM
   int hour = timeStr.substring(0, 2).toInt();
   int minute = timeStr.substring(3, 5).toInt();
-  int second = 0; // 未提供秒数，默认设为0
+  int second = 0;  // 未提供秒数，默认设为0
 
   // 3. 校验输入格式的合法性（基础校验）
-  if (dateStr.length() != 10 || timeStr.length() != 5 || dateStr.charAt(4) != '-' || dateStr.charAt(7) != '-' || timeStr.charAt(2) != ':' || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59)
-  {
+  if (dateStr.length() != 10 || timeStr.length() != 5 || dateStr.charAt(4) != '-' || dateStr.charAt(7) != '-' || timeStr.charAt(2) != ':' || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
     Serial.println("错误：日期或时间格式非法！");
-    return 0; // 返回0表示解析失败
+    return 0;  // 返回0表示解析失败
   }
 
   // 4. 填充tm结构体（tm_mon从0开始，所以月份要-1；tm_year是从1900年开始的年数）
-  struct tm timeInfo = {0};
-  timeInfo.tm_sec = second;       // 秒
-  timeInfo.tm_min = minute;       // 分
-  timeInfo.tm_hour = hour;        // 时
-  timeInfo.tm_mday = day;         // 日
-  timeInfo.tm_mon = month - 1;    // 月（0-11）
-  timeInfo.tm_year = year - 1900; // 年（从1900开始）
-  timeInfo.tm_isdst = -1;         // 自动判断夏令时
+  struct tm timeInfo = { 0 };
+  timeInfo.tm_sec = second;        // 秒
+  timeInfo.tm_min = minute;        // 分
+  timeInfo.tm_hour = hour;         // 时
+  timeInfo.tm_mday = day;          // 日
+  timeInfo.tm_mon = month - 1;     // 月（0-11）
+  timeInfo.tm_year = year - 1900;  // 年（从1900开始）
+  timeInfo.tm_isdst = -1;          // 自动判断夏令时
 
   // 5. 转换为time_t时间戳
   time_t timestamp = mktime(&timeInfo);
 
   // 校验转换结果
-  if (timestamp == (time_t)-1)
-  {
+  if (timestamp == (time_t)-1) {
     Serial.println("错误：时间转换失败（非法日期，如2月30日）！");
     return 0;
   }
