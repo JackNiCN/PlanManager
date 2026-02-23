@@ -18,7 +18,7 @@ void TextWrite::WriteText(File &fontFile, String text, int x, int y, uint16_t co
   for (int i = 0; i < count; i++) {
     if (units[i].type == SplitChinese::TYPE_CHINESE) {
       Serial.println(String(i) + ":" + units[i].content + "\n类型" + String(units[i].type) + "\n在(x,y)" + String(charX) + ',' + String(charY));
-      displayChinese(fontFile, charX, charY, GB.from(units[i].content), color, noneBg, bgcolor);
+      displayChinese(fontFile, charX, charY, GB.get(units[i].content), color, noneBg, bgcolor);
       charX += units[i].content.length() / 3 * 16;
     } else {
       Serial.println(String(i) + ":" + units[i].content + "\n类型" + String(units[i].type) + "\n在(x,y)" + String(charX) + ',' + String(charY));

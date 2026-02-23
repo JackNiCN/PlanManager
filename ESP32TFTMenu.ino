@@ -74,6 +74,7 @@ struct PlanItem
 {
   String name;
   time_t startTime;
+  long durationMinutes;
   time_t endTime;
   String info;
   String id;
@@ -95,6 +96,7 @@ bool isFirstRenderMainScreen = true;
 bool MenuChanged = true;
 unsigned long lastRSSIDraw = 0;
 unsigned long lastPlanCheck = 0;
+String lastTimeStr;
 void renderTFT();
 void doRenderMain();
 void doRenderScreenSave();
@@ -598,6 +600,14 @@ void renderTFT()
   }
   if (sysState == SystemState::Screensave)
   {
+    if (!buttonQueue.isEmpty()){
+      buttonQueue.clear();
+      sysState = SystemState::Normal;
+      isFirstRenderMainScreen = true;
+      lastPlanCheck = 0;
+      lastRSSIDraw = 0;
+      return;
+    }
   }
   if (sysState == SystemState::Menu)
   {
@@ -623,7 +633,7 @@ void doRenderMain()
     File file = openSDFile("/HZK16");
     if (file)
     {
-      Text.displayChinese(file, 2, 24, GB.from("当前计划："), TFT_WHITE, false, TFT_BLACK);
+      Text.displayChinese(file, 2, 24, GB.get("当前计划："), TFT_WHITE, false, TFT_BLACK);
       file.close();
       tft.drawLine(0, 22, 160, 22, TFT_WHITE);
     }
@@ -635,15 +645,18 @@ void doRenderMain()
     isFirstRenderMainScreen = false;
     file.close();
   }
+  String time;
   time_t timestamp = rtc.getEpoch();
   struct tm *timeinfo = localtime(&timestamp);
-  tft.setTextSize(2);
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.drawString((timeinfo->tm_hour < 10 ? "0" + String(timeinfo->tm_hour) : String(timeinfo->tm_hour)) + ":" + (timeinfo->tm_min < 10 ? "0" + String(timeinfo->tm_min) : String(timeinfo->tm_min)), 1, 1);
+  time = (timeinfo->tm_hour < 10 ? "0" + String(timeinfo->tm_hour) : String(timeinfo->tm_hour)) + ":" + (timeinfo->tm_min < 10 ? "0" + String(timeinfo->tm_min) : String(timeinfo->tm_min));
+  if (time != lastTimeStr) {
+    lastTimeStr = time;
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawString(time, 1, 1);
 
-  if (millis() - lastPlanCheck > 30000)
-  {
-    auto plan = FindPlanbyTime(timestamp);
+    PlanItem plan = FindPlanbyTime(timestamp);
+
     tft.fillRect(0, 40, 160, 16, TFT_BLACK);
     tft.fillRect(86, 24, 80, 16, TFT_BLACK);
     if (plan.name == "fail")
@@ -665,7 +678,8 @@ void doRenderMain()
     }
     else
     {
-      File file = openSDFile("/HZK16");
+      {
+        File file = openSDFile("/HZK16");
       if (file)
       {
         Text.WriteText(file, plan.name, 0, 40, TFT_WHITE);
@@ -675,6 +689,7 @@ void doRenderMain()
         Debug.Warning("File open Error");
       }
       file.close();
+      }
       struct tm STbuf;
       struct tm ETbuf;
       struct tm *tmpPtr;
@@ -691,16 +706,26 @@ void doRenderMain()
       else
         memset(&ETbuf, 0, sizeof(struct tm));
 
+      tft.setTextSize(1);
       String timeStr = (STbuf.tm_hour < 10 ? "0" + String(STbuf.tm_hour) : String(STbuf.tm_hour)) + ":" + (STbuf.tm_min < 10 ? "0" + String(STbuf.tm_min) : String(STbuf.tm_min));
       timeStr += " - ";
       timeStr += (ETbuf.tm_hour < 10 ? "0" + String(ETbuf.tm_hour) : String(ETbuf.tm_hour)) + ":" + (ETbuf.tm_min < 10 ? "0" + String(ETbuf.tm_min) : String(ETbuf.tm_min));
       tft.drawString(timeStr, 1, 60);
+      tft.fillRect(1, 76, 16, 159, TFT_BLACK);
+      File file = openSDFile("/HZK16");
+      if (file)
+      {
+       Text.WriteText(file, "时长:" + String(plan.durationMinutes), 1, 76, TFT_WHITE);
+      }
+      else
+      {
+        Debug.Warning("File open Error");
+      }
+      file.close();
     }
-
-    lastPlanCheck = millis();
   }
 
-  if (millis() - lastRSSIDraw > 10000)
+  if (millis() - lastRSSIDraw > 10000 || lastRSSIDraw == 0)
   {
     drawWiFiIcon(15, 160 - 12, getSignalLevel(WiFi.RSSI()));
     Debug.Debug(String(WiFi.RSSI()));
@@ -714,16 +739,21 @@ void doRenderScreenSave()
 
 void doRenderMenu()
 {
-  if (!buttonQueue.isEmpty())
+  if (!buttonQueue.isEmpty() && buttonQueue.pop() == ButtonName::EXT_BUTTON)
   {
-    if (buttonQueue.pop() == ButtonName::EXT_BUTTON)
-    {
-      sysState = SystemState::Normal;
-      isFirstRenderMainScreen = true;
-      lastPlanCheck = 0;
-      lastRSSIDraw = 0;
-      buttonQueue.clear();
-    }
+    sysState = SystemState::Normal;
+    isFirstRenderMainScreen = true;
+    lastPlanCheck = 0;
+    lastRSSIDraw = 0;
+    buttonQueue.clear();
+  }
+  if(!buttonQueue.isEmpty() && buttonQueue.pop() == ButtonName::UP_BUTTON){
+    menu.itemUp();
+    MenuChanged = true;
+  }
+  if(!buttonQueue.isEmpty() && buttonQueue.pop() == ButtonName::DOWN_BUTTON){
+    menu.itemDown();
+    MenuChanged = true;
   }
   if (MenuChanged)
   {
@@ -798,7 +828,7 @@ PlanItem FindPlanbyTime(time_t time)
   if (!jsonFile)
   {
     Debug.Error("file not open.Connot find plan.");
-    return {"fail", 0, 0, "fail", "fail"};
+    return {"fail", 0, 0, 0, "fail", "fail"};
   }
 
   size_t fileSize = jsonFile.size();
@@ -809,7 +839,7 @@ PlanItem FindPlanbyTime(time_t time)
   if (error1)
   {
     Debug.Error("解析JSON文件错误");
-    return {"fail", 0, 0, "fail", "fail"};
+    return {"fail", 0, 0, 0, "fail", "fail"};
   }
   serializeJsonPretty(doc["planList"], Serial);
   Debug.Debug(String(doc["planList"].size()));
@@ -822,14 +852,15 @@ PlanItem FindPlanbyTime(time_t time)
 
     time_t startTime = stringToTime(dateS, bS);
     time_t endTime = stringToTime(dateS, eS);
+    long durationMinutes = doc["planList"][i]["durationMinutes"].as<long>();
     Serial.printf("PlanCheck:%ld-%ld curr:%ld\n", (long)startTime, (long)endTime, (long)time);
     if (time >= startTime && time <= endTime)
     {
-      return {doc["planList"][i]["name"].as<String>(), startTime, endTime, doc["planList"][i]["description"].as<String>(), doc["planList"][i]["id"].as<String>()};
+      return {doc["planList"][i]["name"].as<String>(), startTime, durationMinutes, endTime, doc["planList"][i]["description"].as<String>(), doc["planList"][i]["id"].as<String>()};
     }
   }
 
-  return {"unknow", 0, 0, "unknow", "unknow"};
+  return {"unknow", 0, 0, 0, "unknow", "unknow"};
 }
 
 time_t stringToTime(const String &dateStr, const String &timeStr)
