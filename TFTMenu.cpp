@@ -59,10 +59,10 @@ bool TFTMenu::showMenu(int pageIndex, uint32_t color, uint32_t bgColor){
 
 void TFTMenu::itemUp(){
     int32_t itemsPerPage = height / 20;
-    currentItem = (currentItem + 1) % itemsPerPage;
+    currentItem = (currentItem - 1 + itemsPerPage) % itemsPerPage;
 }
 
 void TFTMenu::itemDown(){
     int32_t itemsPerPage = height / 20;
-    currentItem = (currentItem - 1 + itemsPerPage) % itemsPerPage;
+    currentItem =  (currentItem + 1)% itemsPerPage;
 }
