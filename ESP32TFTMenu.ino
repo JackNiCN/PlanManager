@@ -108,6 +108,7 @@ void setup() {
   sysState = SystemState::Initialization;
   setupTFT();
   setupSD();
+  showSetupScreen();
 
   pinMode(22, OUTPUT);
 
@@ -117,7 +118,6 @@ void setup() {
   delay(1000);
   digitalWrite(22, HIGH);
 
-  showSetupScreen();
   setupWifi();
   setupOTA();
   syncNTPTime();
@@ -674,6 +674,7 @@ void doRenderMenu() {
     if (currentButton == ButtonName::UP_BUTTON) {
       menu.itemUp();
       MenuChanged = true;
+
     }
     if (currentButton == ButtonName::DOWN_BUTTON) {
       menu.itemDown();
