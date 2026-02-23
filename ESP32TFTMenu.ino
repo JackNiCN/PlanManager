@@ -347,7 +347,7 @@ void setupWebServer() {
 
           jsonFile.close();
           MenuChanged = true;
-          lastPlanCheck = 0;
+          lastTimeStr = "";
         }
       }
     });
@@ -401,7 +401,7 @@ void setupWebServer() {
       serializeJsonPretty(fileDoc, jsonFile);
       jsonFile.close();
       MenuChanged = true;
-      lastPlanCheck = 0;
+      lastTimeStr = "";
     }
     request->send(200, "json", "{ code: 200, message: '计划删除成功' }");
   });
