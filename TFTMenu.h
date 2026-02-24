@@ -11,7 +11,7 @@
 
 #include <SplitChinese.h>
 #include <TextWrite.h>
-
+#include <SD.h>
 
 class TFTMenu {
 private:
@@ -24,6 +24,7 @@ private:
   int width = 0;
   int currentItem = 0;
   int x,y;
+  int maxItems;
 public:
   TFTMenu(TFT_eSPI* tftInstance, int maxItemCount = 40);
   ~TFTMenu();
