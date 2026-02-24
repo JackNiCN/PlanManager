@@ -16,6 +16,7 @@
 class TFTMenu {
 private:
   TFT_eSPI* tft;
+  TFT_eSprite* pSpr;
   TFTMenu() = delete;
   String* itemList;
   int itemCount = 0;

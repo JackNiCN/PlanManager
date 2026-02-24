@@ -57,6 +57,7 @@ enum ButtonName {
 CircularBuffer<ButtonName, 10> buttonQueue;
 
 TFT_eSPI tft;
+TFT_eSprite spr(&tft);
 ESP32Time rtc;
 AsyncWebServer server(80);
 TFTMenu menu(&tft, 50);
@@ -114,8 +115,6 @@ void buzzer_alarm_task(void *parameter) {
   // 任务循环
   while (true) {
     if (is_alarming) {
-      Serial.print("报警中，剩余时长：");
-      Serial.println(ALARM_DURATION - (millis() - alarm_start_time));
       if (millis() - alarm_start_time >= ALARM_DURATION) {
         is_alarming = false;
         digitalWrite(BUZZER_PIN, HIGH);
@@ -168,11 +167,11 @@ void setup() {
   );
 
   setupWifi();
-  setupOTA();
+  //setupOTA();
   syncNTPTime();
   setupWebServer();
 
-  menu.setWindowPosition(1, 1, 159, 127);
+  menu.setWindowPosition(0, 0, 160, 128);
   sysState = SystemState::Normal;
 }
 
@@ -192,6 +191,7 @@ void setupTFT() {
   tft.setSwapBytes(true);
   tft.setRotation(1);
   Text.setTFTClass(&tft);
+  spr.createSprite(160, 128);
   Debug.Info("TFT init over. ");
 }
 
@@ -649,7 +649,7 @@ void doRenderMain() {
     PlanItem plan = FindPlanbyTime(timestamp);
     static PlanItem lastFindPlan;
     lastFindPlan = plan;
-    tft.fillRect(0, 40, 160, 16, TFT_BLACK);
+    tft.fillRect(0, 40, 160, 80, TFT_BLACK);
     tft.fillRect(86, 24, 80, 16, TFT_BLACK);
     if (plan.name == "fail") {
       Debug.Warning("Get current plan faild");

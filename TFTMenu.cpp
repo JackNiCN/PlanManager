@@ -3,6 +3,8 @@
 
 TFTMenu::TFTMenu(TFT_eSPI *tftInstance, int maxItemCount) : tft(tftInstance), maxItems(maxItemCount)
 {
+    pSpr = new TFT_eSprite(tft);
+    pSpr->createSprite(160, 128);
     itemList = new String[maxItems];
     itemCount = 0;
     currentItem = 0;
@@ -41,11 +43,12 @@ void TFTMenu::clearItemList() {
 
 
 bool TFTMenu::showMenu(int pageIndex, uint32_t color, uint32_t bgColor){
-    if (tft == nullptr) {
+    if (pSpr == nullptr) {
         Debug.Error("TFT instance is null!");
         return false;
     }
 
+    pSpr->fillSprite(bgColor);
 
     int32_t itemsPerPage = height / 20; 
     if(itemsPerPage < 1){
@@ -62,12 +65,12 @@ bool TFTMenu::showMenu(int pageIndex, uint32_t color, uint32_t bgColor){
     Debug.Info("show menu, page: %d, total pages: %d", pageIndex, pageCount);
 
 
-    tft->fillRect(x, y, width, height, bgColor);
-    tft->drawRect(x, y, width, height, color);
+    pSpr->fillRect(x, y, width, height, bgColor);
+    pSpr->drawRect(x, y, width, height, color);
 
 
     for(int i = 0; i < itemsPerPage; i++){
-        tft->drawLine(x, y + 20 * i, x + width, y + 20 * i, color);
+        pSpr->drawLine(x, y + 20 * i, x + width, y + 20 * i, color);
     }
 
     File fontFile = SD.open("/HZK16", FILE_READ);
@@ -76,20 +79,26 @@ bool TFTMenu::showMenu(int pageIndex, uint32_t color, uint32_t bgColor){
         return false;
     }
 
-    Text.setTFTClass(tft);
+    Text.setTFTClass(pSpr);
 
     int startIndex = (pageIndex - 1) * itemsPerPage;
-    for(int i = startIndex, j = 0; i < itemCount && j < itemsPerPage; i++, j++){
+    for(int i = startIndex, j = 0; j < itemsPerPage; i++, j++){
         int itemY = y + 20 * j + 2;
         if(currentItem == j){
-            tft->fillRect(x+1, y + 20 * j + 1, width - 2, 19, color);
-            Text.WriteText(fontFile, itemList[i], x + 2, itemY, bgColor);
+            pSpr->fillRect(x+1, y + 20 * j + 1, width - 2, 19, color);
+            if(i < itemCount){
+                Text.WriteText(fontFile, itemList[i], x + 2, itemY, bgColor);
+            }
         }else{
-            Text.WriteText(fontFile, itemList[i], x + 2, itemY, color, false, bgColor);
+            if(i < itemCount){
+                Text.WriteText(fontFile, itemList[i], x + 2, itemY, color, false, bgColor);
+            }
         }
     }
 
     fontFile.close();
+    pSpr->pushSprite(0, 0);
+    Text.setTFTClass(tft);
     return true;
 }
 
