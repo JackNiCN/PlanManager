@@ -57,7 +57,7 @@ bool TFTMenu::showMenu(int pageIndex, uint32_t color, uint32_t bgColor){
     pageCount = (itemCount + itemsPerPage - 1) / itemsPerPage;
 
     if (pageIndex < 1) pageIndex = 1;
-    if (pageIndex > pageCount) pageIndex = pageCount;
+    if (pageIndex != 1 && pageIndex > pageCount) pageIndex = pageCount;
 
     Debug.Info("show menu, page: %d, total pages: %d", pageIndex, pageCount);
 
