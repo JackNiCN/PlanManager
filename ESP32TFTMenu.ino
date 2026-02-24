@@ -13,6 +13,14 @@
 #include <ArduinoOTA.h>
 #include "TextWrite.h"
 #include <CircularBuffer.hpp>
+
+#define BUZZER_PIN 22
+bool is_alarming = false;          // 报警总开关
+unsigned long alarm_start_time = 0; // 报警启动时间戳
+const unsigned long ALARM_DURATION = 30000; // 报警持续时间（30秒）
+const int BUZZER_ON_TIME = 300;     // 蜂鸣器响的时长（毫秒）
+const int BUZZER_OFF_TIME = 700;  // 蜂鸣器停的时长（毫秒）
+
 const char *ssid = "vineky";
 const char *password = "springhappyo621";
 const int WifiConnectWaitLimit = 10;  // times of 500ms delay
@@ -101,6 +109,38 @@ int getSignalLevel(int rssi);
 void drawWiFiIcon(int x, int y, int level);
 PlanItem FindPlanbyTime(time_t);
 time_t stringToTime(const String &dateStr, const String &timeStr);
+void promptTone();
+void buzzer_alarm_task(void *parameter) {
+  // 任务循环
+  while (true) {
+    if (is_alarming) {
+      Serial.print("报警中，剩余时长：");
+      Serial.println(ALARM_DURATION - (millis() - alarm_start_time));
+      if (millis() - alarm_start_time >= ALARM_DURATION) {
+        is_alarming = false;
+        digitalWrite(BUZZER_PIN, HIGH);
+      } else {
+        digitalWrite(BUZZER_PIN, LOW);
+        vTaskDelay(BUZZER_ON_TIME / portTICK_PERIOD_MS); // 响指定时长
+        digitalWrite(BUZZER_PIN, HIGH);
+        vTaskDelay(BUZZER_OFF_TIME / portTICK_PERIOD_MS); // 停指定时长
+      }
+    } else {
+      // 无报警时，蜂鸣器关闭
+      digitalWrite(BUZZER_PIN, HIGH);
+      vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+  }
+}
+
+
+void start_alarm() {
+  if (!is_alarming) { 
+    is_alarming = true;
+    alarm_start_time = millis();
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -110,13 +150,22 @@ void setup() {
   setupSD();
   showSetupScreen();
 
-  pinMode(22, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
 
-  digitalWrite(22, HIGH);
+  digitalWrite(BUZZER_PIN, HIGH);
   delay(100);
-  digitalWrite(22, LOW);
+  digitalWrite(BUZZER_PIN, LOW);
   delay(1000);
   digitalWrite(22, HIGH);
+
+  xTaskCreate(
+    buzzer_alarm_task,    // 任务函数
+    "BuzzerAlarm",        // 任务名称
+    2048,                 // 栈大小
+    NULL,                 // 传递给任务的参数
+    2,                    // 任务优先级
+    NULL                  // 任务句柄
+  );
 
   setupWifi();
   setupOTA();
@@ -560,6 +609,7 @@ void renderTFT() {
 
 void doRenderMain() {
   if (!buttonQueue.isEmpty()) {
+    is_alarming = false;
     if (buttonQueue.pop() == ButtonName::EXT_BUTTON) {
       sysState = SystemState::Menu;
       buttonQueue.clear();
@@ -583,8 +633,13 @@ void doRenderMain() {
   }
   String time;
   time_t timestamp = rtc.getEpoch();
-  struct tm *timeinfo = localtime(&timestamp);
-  time = (timeinfo->tm_hour < 10 ? "0" + String(timeinfo->tm_hour) : String(timeinfo->tm_hour)) + ":" + (timeinfo->tm_min < 10 ? "0" + String(timeinfo->tm_min) : String(timeinfo->tm_min));
+  struct tm *tmpPtr = localtime(&timestamp);
+  struct tm timeinfo;
+  if (tmpPtr)
+        memcpy(&timeinfo, tmpPtr, sizeof(struct tm));
+      else
+        memset(&timeinfo, 0, sizeof(struct tm));
+  time = (timeinfo.tm_hour < 10 ? "0" + String(timeinfo.tm_hour) : String(timeinfo.tm_hour)) + ":" + (timeinfo.tm_min < 10 ? "0" + String(timeinfo.tm_min) : String(timeinfo.tm_min));
   if (time != lastTimeStr) {
     lastTimeStr = time;
     tft.setTextSize(2);
@@ -592,7 +647,8 @@ void doRenderMain() {
     tft.drawString(time, 1, 1);
 
     PlanItem plan = FindPlanbyTime(timestamp);
-
+    static PlanItem lastFindPlan;
+    lastFindPlan = plan;
     tft.fillRect(0, 40, 160, 16, TFT_BLACK);
     tft.fillRect(86, 24, 80, 16, TFT_BLACK);
     if (plan.name == "fail") {
@@ -617,7 +673,7 @@ void doRenderMain() {
       }
       struct tm STbuf;
       struct tm ETbuf;
-      struct tm *tmpPtr;
+
 
       tmpPtr = localtime(&plan.startTime);
       if (tmpPtr)
@@ -644,9 +700,11 @@ void doRenderMain() {
         Debug.Warning("File open Error");
       }
       file.close();
+      if(STbuf.tm_hour == timeinfo.tm_hour && STbuf.tm_min == timeinfo.tm_min){
+        start_alarm();
+      }
     }
   }
-
   if (millis() - lastRSSIDraw > 10000 || lastRSSIDraw == 0) {
     drawWiFiIcon(15, 160 - 12, getSignalLevel(WiFi.RSSI()));
     Debug.Debug(String(WiFi.RSSI()));
@@ -670,14 +728,17 @@ void doRenderMenu() {
       lastRSSIDraw = 0;
       lastTimeStr = "";
       buttonQueue.clear();
+      promptTone();
     }
     if (currentButton == ButtonName::UP_BUTTON) {
       menu.itemUp();
+      promptTone();
       MenuChanged = true;
 
     }
     if (currentButton == ButtonName::DOWN_BUTTON) {
       menu.itemDown();
+      promptTone();
       MenuChanged = true;
     }
   }
@@ -815,4 +876,10 @@ time_t stringToTime(const String &dateStr, const String &timeStr) {
   }
 
   return timestamp;
+}
+
+void promptTone(){
+  digitalWrite(BUZZER_PIN, LOW);
+  delay(100);
+  digitalWrite(BUZZER_PIN, HIGH);
 }
