@@ -66,7 +66,6 @@ void TFTMenu::clearItemList() {
         itemList[i] = "";
     }
     itemCount = 0;
-    currentItem = 0;
 }
 
 

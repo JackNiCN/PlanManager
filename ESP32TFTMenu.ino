@@ -44,7 +44,7 @@ bool leftButtonLastState = 0;
 bool rightButtonLastState = 0;
 bool middleButtonLastState = 0;
 bool extButtonLastState = 0;
-
+int menuPageIndex = 1;
 bool preSortOK = false;
 
 enum ButtonName {
@@ -744,10 +744,21 @@ void doRenderMenu() {
       menu.itemUp();
       promptTone();
       MenuChanged = true;
-
     }
     if (currentButton == ButtonName::DOWN_BUTTON) {
       menu.itemDown();
+      promptTone();
+      MenuChanged = true;
+    }
+    if (currentButton == ButtonName::LEFT_BUTTON) {
+      if(menuPageIndex > 1){
+        menuPageIndex-- ;
+      }
+      promptTone();
+      MenuChanged = true;
+    }
+    if (currentButton == ButtonName::RIGHT_BUTTON) {
+      menuPageIndex++ ;
       promptTone();
       MenuChanged = true;
     }
@@ -774,7 +785,7 @@ void doRenderMenu() {
       menu.addItem(doc["planList"][i]["name"]);
     }
 
-    menu.showMenu(1, TFT_BLUE, TFT_BLACK);
+    menu.showMenu(menuPageIndex, TFT_BLUE, TFT_BLACK);
     MenuChanged = false;
   }
 }
@@ -890,7 +901,7 @@ time_t stringToTime(const String &dateStr, const String &timeStr) {
 
 void promptTone(){
   digitalWrite(BUZZER_PIN, LOW);
-  delay(100);
+  delay(150);
   digitalWrite(BUZZER_PIN, HIGH);
 }
 
