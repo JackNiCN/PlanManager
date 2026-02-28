@@ -62,7 +62,7 @@ TFT_eSPI tft;
 TFT_eSprite spr(&tft);
 ESP32Time rtc;
 AsyncWebServer server(80);
-TFTMenu menu(&tft, 50);
+TFTMenu menu(&tft, &spr, 50);
 
 enum SystemState {
   Initialization,
@@ -198,8 +198,9 @@ void setupTFT() {
   tft.init();
   tft.setSwapBytes(true);
   tft.setRotation(1);
-  Text.setTFTClass(&tft);
   spr.createSprite(160, 128);
+  Text.setTFTClass(&tft);
+  Text.setSprite(&spr);
   Debug.Info("TFT init over. ");
 }
 
@@ -627,6 +628,7 @@ void doRenderMain() {
   if (isFirstRenderMainScreen) {
     tft.fillScreen(TFT_BLACK);
     Text.setTFTClass(&tft);
+    Text.setSprite(nullptr);
     File file = openSDFile("/HZK16");
     if (file) {
       Text.displayChinese(file, 2, 24, GB.get("当前计划："), TFT_WHITE, false, TFT_BLACK);

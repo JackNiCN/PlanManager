@@ -4,10 +4,42 @@ TextWrite Text;
 
 TextWrite::TextWrite() {
   this->tft = nullptr;
+  this->sprite = nullptr;
 }
 
 void TextWrite::setTFTClass(TFT_eSPI *_tft) {
   this->tft = _tft;
+}
+
+void TextWrite::setSprite(TFT_eSprite *_sprite) {
+  this->sprite = _sprite;
+}
+
+// helper functions that choose between sprite and tft
+static inline void _setTextColor(TFT_eSPI *tftptr, TFT_eSprite *spr, uint16_t color, uint16_t bgcolor, bool opa) {
+    if (spr)
+        spr->setTextColor(color, bgcolor, opa);
+    else if (tftptr)
+        tftptr->setTextColor(color, bgcolor, opa);
+}
+static inline void _setTextSize(TFT_eSPI *tftptr, TFT_eSprite *spr, uint8_t size) {
+    if (spr)
+        spr->setTextSize(size);
+    else if (tftptr)
+        tftptr->setTextSize(size);
+}
+static inline void _drawString(TFT_eSPI *tftptr, TFT_eSprite *spr, const String &str, int x, int y) {
+    if (spr)
+        spr->drawString(str, x, y);
+    else if (tftptr)
+        tftptr->drawString(str, x, y);
+}
+static inline int _textWidth(TFT_eSPI *tftptr, TFT_eSprite *spr, const String &str) {
+    if (spr)
+        return spr->textWidth(str);
+    else if (tftptr)
+        return tftptr->textWidth(str);
+    return 0;
 }
 
 void TextWrite::WriteText(File &fontFile, String text, int x, int y, uint16_t color, bool noneBg, uint16_t bgcolor) {
@@ -22,10 +54,10 @@ void TextWrite::WriteText(File &fontFile, String text, int x, int y, uint16_t co
       charX += units[i].content.length() / 3 * 16;
     } else {
       Serial.println(String(i) + ":" + units[i].content + "\n类型" + String(units[i].type) + "\n在(x,y)" + String(charX) + ',' + String(charY));
-      tft->setTextColor(color, bgcolor, !noneBg);
-      tft->setTextSize(2);
-      tft->drawString(units[i].content, charX, charY);
-      charX += tft->textWidth(units[i].content);
+      _setTextColor(tft, sprite, color, bgcolor, !noneBg);
+      _setTextSize(tft, sprite, 2);
+      _drawString(tft, sprite, units[i].content, charX, charY);
+      charX += _textWidth(tft, sprite, units[i].content);
     }
   }
 }
@@ -73,10 +105,16 @@ void TextWrite::displayChinese(File &fontFile, int x, int y, String chStr, uint1
           isLight = (dotLow & (0x80 >> (col - 8))) != 0;
         }
         if (isLight) {
-          tft->drawPixel(pixelX, pixelY, color);
+          if (sprite)
+              sprite->drawPixel(pixelX, pixelY, color);
+          else if (tft)
+              tft->drawPixel(pixelX, pixelY, color);
         } else {
           if (!noneBg) {
-            tft->drawPixel(pixelX, pixelY, bgcolor);
+            if (sprite)
+                sprite->drawPixel(pixelX, pixelY, bgcolor);
+            else if (tft)
+                tft->drawPixel(pixelX, pixelY, bgcolor);
           }
         }
       }

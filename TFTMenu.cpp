@@ -1,18 +1,45 @@
 #include <TFTMenu.h>
 
 
-TFTMenu::TFTMenu(TFT_eSPI *tftInstance, int maxItemCount) : tft(tftInstance), maxItems(maxItemCount)
+// create internal sprite covering the full display
+TFTMenu::TFTMenu(TFT_eSPI *tftInstance, int maxItemCount) : tft(tftInstance), maxItems(maxItemCount), pSpr(nullptr)
 {
-    pSpr = new TFT_eSprite(tft);
-    pSpr->createSprite(160, 128);
+    if (tft) {
+        pSpr = new TFT_eSprite(tft);
+        pSpr->createSprite(tft->width(), tft->height());
+        ownsSprite = true;
+    }
     itemList = new String[maxItems];
     itemCount = 0;
     currentItem = 0;
     Debug.Info("TFTMenu initialized");
 }
 
+// use an externally supplied sprite (caller responsible for creating)
+TFTMenu::TFTMenu(TFT_eSPI *tftInstance, TFT_eSprite* sprite, int maxItemCount)
+    : tft(tftInstance), pSpr(sprite), maxItems(maxItemCount), ownsSprite(false)
+{
+    itemList = new String[maxItems];
+    itemCount = 0;
+    currentItem = 0;
+    Debug.Info("TFTMenu initialized with external sprite");
+}
+
 TFTMenu::~TFTMenu(){
     delete[] itemList;
+    if (ownsSprite && pSpr) {
+        pSpr->deleteSprite();
+        delete pSpr;
+    }
+}
+
+void TFTMenu::setSprite(TFT_eSprite* sprite, bool takeOwnership) {
+    if (ownsSprite && pSpr) {
+        pSpr->deleteSprite();
+        delete pSpr;
+    }
+    pSpr = sprite;
+    ownsSprite = takeOwnership;
 }
 
 void TFTMenu::setWindowPosition(int _x, int _y, int _w, int _h){
@@ -20,6 +47,7 @@ void TFTMenu::setWindowPosition(int _x, int _y, int _w, int _h){
     y = _y;
     width = _w;
     height = _h;
+    // no action needed for sprite size since we usually use full-screen sprite
 }
 
 
@@ -79,7 +107,9 @@ bool TFTMenu::showMenu(int pageIndex, uint32_t color, uint32_t bgColor){
         return false;
     }
 
-    Text.setTFTClass(pSpr);
+    // configure TextWrite to draw into the sprite
+    Text.setSprite(pSpr);
+    Text.setTFTClass(nullptr);
 
     int startIndex = (pageIndex - 1) * itemsPerPage;
     for(int i = startIndex, j = 0; j < itemsPerPage; i++, j++){
@@ -98,6 +128,8 @@ bool TFTMenu::showMenu(int pageIndex, uint32_t color, uint32_t bgColor){
 
     fontFile.close();
     pSpr->pushSprite(0, 0);
+    // restore TextWrite for direct TFT drawing
+    Text.setSprite(nullptr);
     Text.setTFTClass(tft);
     return true;
 }
