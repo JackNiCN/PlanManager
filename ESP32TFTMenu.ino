@@ -45,6 +45,8 @@ bool rightButtonLastState = 0;
 bool middleButtonLastState = 0;
 bool extButtonLastState = 0;
 
+bool preSortOK = false;
+
 enum ButtonName {
   UP_BUTTON,
   DOWN_BUTTON,
@@ -57,9 +59,10 @@ enum ButtonName {
 CircularBuffer<ButtonName, 10> buttonQueue;
 
 TFT_eSPI tft;
+TFT_eSprite spr(&tft);
 ESP32Time rtc;
 AsyncWebServer server(80);
-TFTMenu menu(&tft, 50);
+TFTMenu menu(&tft, &spr, 50);
 
 enum SystemState {
   Initialization,
@@ -110,12 +113,16 @@ void drawWiFiIcon(int x, int y, int level);
 PlanItem FindPlanbyTime(time_t);
 time_t stringToTime(const String &dateStr, const String &timeStr);
 void promptTone();
+void quickSortJsonArray(JsonArray arr, int low, int high, bool (*comparator)(JsonVariant a, JsonVariant b));
+void sortJsonArrayByVariantQuick(JsonArray jsonArray, bool (*comparator)(JsonVariant a, JsonVariant b));
+bool planListComparator(JsonVariant a, JsonVariant b);
+int insertIntoSortedJsonArray(JsonArray sortedArray, JsonVariant newElement, bool (*comparator)(JsonVariant a, JsonVariant b)) ;
+void preSortPlanList();
+
 void buzzer_alarm_task(void *parameter) {
   // 任务循环
   while (true) {
     if (is_alarming) {
-      Serial.print("报警中，剩余时长：");
-      Serial.println(ALARM_DURATION - (millis() - alarm_start_time));
       if (millis() - alarm_start_time >= ALARM_DURATION) {
         is_alarming = false;
         digitalWrite(BUZZER_PIN, HIGH);
@@ -168,11 +175,11 @@ void setup() {
   );
 
   setupWifi();
-  setupOTA();
+  //setupOTA();
   syncNTPTime();
   setupWebServer();
-
-  menu.setWindowPosition(1, 1, 159, 127);
+  preSortPlanList();
+  menu.setWindowPosition(0, 0, 160, 128);
   sysState = SystemState::Normal;
 }
 
@@ -191,7 +198,9 @@ void setupTFT() {
   tft.init();
   tft.setSwapBytes(true);
   tft.setRotation(1);
+  spr.createSprite(160, 128);
   Text.setTFTClass(&tft);
+  Text.setSprite(&spr);
   Debug.Info("TFT init over. ");
 }
 
@@ -383,7 +392,7 @@ void setupWebServer() {
             return;
           }
 
-          fileDoc["planList"].as<JsonArray>().add(doc);
+          insertIntoSortedJsonArray(fileDoc["planList"], doc, planListComparator);
 
           jsonFile = SD.open("/plans.json", FILE_WRITE);
           if (!jsonFile) {
@@ -619,6 +628,7 @@ void doRenderMain() {
   if (isFirstRenderMainScreen) {
     tft.fillScreen(TFT_BLACK);
     Text.setTFTClass(&tft);
+    Text.setSprite(nullptr);
     File file = openSDFile("/HZK16");
     if (file) {
       Text.displayChinese(file, 2, 24, GB.get("当前计划："), TFT_WHITE, false, TFT_BLACK);
@@ -649,7 +659,7 @@ void doRenderMain() {
     PlanItem plan = FindPlanbyTime(timestamp);
     static PlanItem lastFindPlan;
     lastFindPlan = plan;
-    tft.fillRect(0, 40, 160, 16, TFT_BLACK);
+    tft.fillRect(0, 40, 160, 80, TFT_BLACK);
     tft.fillRect(86, 24, 80, 16, TFT_BLACK);
     if (plan.name == "fail") {
       Debug.Warning("Get current plan faild");
@@ -882,4 +892,122 @@ void promptTone(){
   digitalWrite(BUZZER_PIN, LOW);
   delay(100);
   digitalWrite(BUZZER_PIN, HIGH);
+}
+
+void quickSortJsonArray(JsonArray arr, int low, int high, bool (*comparator)(JsonVariant a, JsonVariant b)) {
+  if (low >= high) return;
+
+  // 选基准值 ——必须复制值，不能只是拿到引用
+  // JsonVariant pivot = arr[high]; // 原来这只是引用, 后续交换会改变它
+  DynamicJsonDocument pivotDoc(256);
+  JsonVariant pivot = pivotDoc.to<JsonVariant>();
+  pivot.set(arr[high]);
+
+  int i = low - 1;
+
+  // 分区
+  for (int j = low; j < high; j++) {
+    if (comparator(arr[j], pivot)) {
+      i++;
+      // 交换arr[i]和arr[j]，使用临时 JsonVariant 深拷贝
+      DynamicJsonDocument tmpDoc(256);
+      JsonVariant temp = tmpDoc.to<JsonVariant>();
+      temp.set(arr[i]);     // 保存原始 arr[i]
+      arr[i].set(arr[j]);   // arr[i] = arr[j]
+      arr[j].set(temp);     // arr[j] = old arr[i]
+    }
+  }
+
+  // 交换基准值到正确位置，同样使用深拷贝
+  i++;
+  {
+    DynamicJsonDocument tmpDoc(256);
+    JsonVariant temp = tmpDoc.to<JsonVariant>();
+    temp.set(arr[i]);
+    arr[i].set(arr[high]);
+    arr[high].set(temp);
+  }
+
+  // 递归排序左右分区
+  quickSortJsonArray(arr, low, i - 1, comparator);
+  quickSortJsonArray(arr, i + 1, high, comparator);
+}
+
+// 对外封装的快速排序函数
+void sortJsonArrayByVariantQuick(JsonArray jsonArray, bool (*comparator)(JsonVariant a, JsonVariant b)) {
+  if (jsonArray.size() <= 1) return;
+  quickSortJsonArray(jsonArray, 0, jsonArray.size() - 1, comparator);
+}
+
+bool planListComparator(JsonVariant a, JsonVariant b)
+{
+  String AdateS = a["date"].as<String>();
+  String AbeginS = a["beginTime"].as<String>();
+  time_t AstartTime = stringToTime(AdateS, AbeginS);
+  String BdateS = b["date"].as<String>();
+  String BbeginS = b["beginTime"].as<String>();
+  time_t BstartTime = stringToTime(BdateS, BbeginS);
+  return AstartTime < BstartTime;
+}
+/**
+ * @brief 向已有序的JSON数组中插入新元素（保持数组有序）
+ * @param sortedArray 已排序的JsonArray（升序/降序由comparator决定）
+ * @param newElement  要插入的新元素（JsonVariant）
+ * @param comparator  比较函数（a应排在b前则返回true，如升序：a<int>() < b<int>()）
+ * @return int        新元素插入的索引位置
+ */
+int insertIntoSortedJsonArray(JsonArray sortedArray, JsonVariant newElement, bool (*comparator)(JsonVariant a, JsonVariant b)) {
+  if(!preSortOK){
+    return -1;
+  }
+  size_t n = sortedArray.size();
+  
+  int insertIndex = 0;
+  for (; insertIndex < n; insertIndex++) {
+    if (!comparator(sortedArray[insertIndex], newElement)) {
+      break;
+    }
+  }
+
+  sortedArray.add(JsonVariant());
+
+  for (int i = n; i > insertIndex; i--) {
+    sortedArray[i].set(sortedArray[i-1]);
+  }
+
+  sortedArray[insertIndex].set(newElement);
+
+  return insertIndex;
+}
+
+void preSortPlanList()
+{
+  File jsonFile = SD.open("/plans.json", FILE_READ);
+  if (!jsonFile)
+  {
+    Debug.Warning("file not open.All Sort Will Not Be used.");
+    return;
+  }
+
+  size_t fileSize = jsonFile.size();
+
+  DynamicJsonDocument fileDoc(fileSize * 2);
+
+  DeserializationError error1 = deserializeJson(fileDoc, jsonFile);
+  jsonFile.close();
+  if (error1)
+  {
+    Debug.Warning("deserializeJson file faild.All Sort Will Not Be used.");
+    return;
+  }
+  sortJsonArrayByVariantQuick(fileDoc["planList"], planListComparator);
+  jsonFile = SD.open("/plans.json", FILE_WRITE);
+  if (!jsonFile)
+  {
+    Debug.Warning("file not open.");
+    return;
+  }
+  serializeJsonPretty(fileDoc, jsonFile);
+  jsonFile.close();
+  preSortOK = true;
 }

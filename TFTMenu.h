@@ -16,6 +16,8 @@
 class TFTMenu {
 private:
   TFT_eSPI* tft;
+  TFT_eSprite* pSpr;
+  bool ownsSprite = false;
   TFTMenu() = delete;
   String* itemList;
   int itemCount = 0;
@@ -26,8 +28,15 @@ private:
   int x,y;
   int maxItems;
 public:
+  // normal constructor creates an internal sprite sized to full display
   TFTMenu(TFT_eSPI* tftInstance, int maxItemCount = 40);
+  // alternate constructor takes an existing sprite
+  TFTMenu(TFT_eSPI* tftInstance, TFT_eSprite* sprite, int maxItemCount = 40);
   ~TFTMenu();
+
+  // can set/change sprite later; take ownership if requested
+  void setSprite(TFT_eSprite* sprite, bool takeOwnership = false);
+
   void setWindowPosition(int _x, int _y, int _w, int _h);
   void addItem(String item);
   void clearItemList();
