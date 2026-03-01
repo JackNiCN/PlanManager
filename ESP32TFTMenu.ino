@@ -193,7 +193,7 @@ void setup() {
   );
 
   setupWifi();
-  //setupOTA();
+  setupOTA();
   syncNTPTime();
   setupWebServer();
   preSortPlanList();
@@ -223,13 +223,14 @@ void setupTFT() {
 }
 
 void showSetupScreen() {
-  tft.fillScreen(TFT_BLACK);
+  spr.fillSprite(TFT_BLACK);
   File file = openSDFile("/HZK16");
   if (!file) {
     Debug.Error("read HZK16 ERROR");
   }
   Text.WriteText(file, "正在启动", 20, 20, TFT_WHITE);
   file.close();
+  spr.pushSprite(0, 0);
 }
 
 void setupWifi() {
@@ -502,11 +503,10 @@ void setupOTA() {
       }
 
       Serial.println("Start updating " + type);
+      server.end();
     })
     .onEnd([]() {
       Serial.println("\nEnd");
-      Serial.println("restart system");
-      esp_restart();
     })
     .onProgress([](unsigned int progress, unsigned int total) {
       Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
