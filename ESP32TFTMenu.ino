@@ -625,18 +625,19 @@ void doRenderMain() {
       MenuChanged = true;
     }
   }
+
+  Text.setTFTClass(&tft);
+  Text.setSprite(&spr);
   if (isFirstRenderMainScreen) {
-    tft.fillScreen(TFT_BLACK);
-    Text.setTFTClass(&tft);
-    Text.setSprite(nullptr);
+    spr.fillSprite(TFT_BLACK);
     File file = openSDFile("/HZK16");
     if (file) {
       Text.displayChinese(file, 2, 24, GB.get("当前计划："), TFT_WHITE, false, TFT_BLACK);
       file.close();
-      tft.drawLine(0, 22, 160, 22, TFT_WHITE);
+      spr.drawLine(0, 22, 160, 22, TFT_WHITE);
     } else {
-      tft.setTextColor(TFT_RED, TFT_BLACK);
-      tft.drawString("Connot open HZK16", 5, 24);
+      spr.setTextColor(TFT_RED, TFT_BLACK);
+      spr.drawString("Connot open HZK16", 5, 24);
     }
     isFirstRenderMainScreen = false;
     file.close();
@@ -652,15 +653,15 @@ void doRenderMain() {
   time = (timeinfo.tm_hour < 10 ? "0" + String(timeinfo.tm_hour) : String(timeinfo.tm_hour)) + ":" + (timeinfo.tm_min < 10 ? "0" + String(timeinfo.tm_min) : String(timeinfo.tm_min));
   if (time != lastTimeStr) {
     lastTimeStr = time;
-    tft.setTextSize(2);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString(time, 1, 1);
+    spr.setTextSize(2);
+    spr.setTextColor(TFT_WHITE, TFT_BLACK);
+    spr.drawString(time, 1, 1);
 
     PlanItem plan = FindPlanbyTime(timestamp);
     static PlanItem lastFindPlan;
     lastFindPlan = plan;
-    tft.fillRect(0, 40, 160, 80, TFT_BLACK);
-    tft.fillRect(86, 24, 80, 16, TFT_BLACK);
+    spr.fillRect(0, 40, 160, 80, TFT_BLACK);
+    spr.fillRect(86, 24, 80, 16, TFT_BLACK);
     if (plan.name == "fail") {
       Debug.Warning("Get current plan faild");
     } else if (plan.name == "unknow") {
@@ -697,12 +698,12 @@ void doRenderMain() {
       else
         memset(&ETbuf, 0, sizeof(struct tm));
 
-      tft.setTextSize(1);
+      spr.setTextSize(1);
       String timeStr = (STbuf.tm_hour < 10 ? "0" + String(STbuf.tm_hour) : String(STbuf.tm_hour)) + ":" + (STbuf.tm_min < 10 ? "0" + String(STbuf.tm_min) : String(STbuf.tm_min));
       timeStr += " - ";
       timeStr += (ETbuf.tm_hour < 10 ? "0" + String(ETbuf.tm_hour) : String(ETbuf.tm_hour)) + ":" + (ETbuf.tm_min < 10 ? "0" + String(ETbuf.tm_min) : String(ETbuf.tm_min));
-      tft.drawString(timeStr, 1, 60);
-      tft.fillRect(1, 76, 16, 159, TFT_BLACK);
+      spr.drawString(timeStr, 1, 60);
+      spr.fillRect(1, 76, 16, 159, TFT_BLACK);
       File file = openSDFile("/HZK16");
       if (file) {
         Text.WriteText(file, "时长:" + String(plan.durationMinutes), 1, 76, TFT_WHITE);
@@ -720,6 +721,7 @@ void doRenderMain() {
     Debug.Debug(String(WiFi.RSSI()));
     lastRSSIDraw = millis();
   }
+  spr.pushSprite(0, 0);
 }
 
 void doRenderScreenSave() {
@@ -804,24 +806,24 @@ int getSignalLevel(int rssi) {
 }
 
 void drawWiFiIcon(int x, int y, int level) {
-  tft.fillRect(y - 8, x - 10, 16, 16, TFT_BLACK);
-  tft.fillCircle(y, x, 2, level > 0 ? TFT_BLUE : 0x39C4);
+  spr.fillRect(y - 8, x - 10, 16, 16, TFT_BLACK);
+  spr.fillCircle(y, x, 2, level > 0 ? TFT_BLUE : 0x39C4);
   if (level >= 1)
-    tft.fillRect(y - 1, x - 2, 3, 2, TFT_BLUE);
+    spr.fillRect(y - 1, x - 2, 3, 2, TFT_BLUE);
   else if (level > 0)
-    tft.drawRect(y - 1, x - 2, 3, 2, 0x39C4);
+    spr.drawRect(y - 1, x - 2, 3, 2, 0x39C4);
   if (level >= 2)
-    tft.fillRect(y - 3, x - 5, 6, 2, TFT_BLUE);
+    spr.fillRect(y - 3, x - 5, 6, 2, TFT_BLUE);
   else if (level > 0)
-    tft.drawRect(y - 3, x - 5, 6, 2, 0x39C4);
+    spr.drawRect(y - 3, x - 5, 6, 2, 0x39C4);
   if (level >= 3)
-    tft.fillRect(y - 4, x - 8, 9, 2, TFT_BLUE);
+    spr.fillRect(y - 4, x - 8, 9, 2, TFT_BLUE);
   else if (level > 0)
-    tft.drawRect(y - 4, x - 8, 9, 2, 0x39C4);
+    spr.drawRect(y - 4, x - 8, 9, 2, 0x39C4);
   if (level >= 4)
-    tft.fillRect(y - 6, x - 11, 12, 2, TFT_BLUE);
+    spr.fillRect(y - 6, x - 11, 12, 2, TFT_BLUE);
   else if (level > 0)
-    tft.drawRect(y - 6, x - 11, 12, 2, 0x39C4);
+    spr.drawRect(y - 6, x - 11, 12, 2, 0x39C4);
 }
 
 PlanItem FindPlanbyTime(time_t time) {
