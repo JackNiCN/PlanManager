@@ -13,13 +13,22 @@
 #include <TextWrite.h>
 #include <SD.h>
 
+struct PlanItem {
+  String name;
+  time_t startTime;
+  long durationMinutes;
+  time_t endTime;
+  String info;
+  String id;
+};
+
 class TFTMenu {
 private:
   TFT_eSPI* tft;
   TFT_eSprite* pSpr;
   bool ownsSprite = false;
   TFTMenu() = delete;
-  String* itemList;
+  PlanItem* itemList;
   int itemCount = 0;
   int pageCount = 0;
   int height = 0;
@@ -38,10 +47,13 @@ public:
   void setSprite(TFT_eSprite* sprite, bool takeOwnership = false);
 
   void setWindowPosition(int _x, int _y, int _w, int _h);
-  void addItem(String item);
+  void addItem(PlanItem item);
   void clearItemList();
   int getPageCount() const{
     return pageCount;
+  }
+  PlanItem getCurrentItem(){
+    return itemList[currentItem];
   }
   void itemUp();
   void itemDown();

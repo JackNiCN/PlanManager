@@ -9,7 +9,7 @@ TFTMenu::TFTMenu(TFT_eSPI *tftInstance, int maxItemCount) : tft(tftInstance), ma
         pSpr->createSprite(tft->width(), tft->height());
         ownsSprite = true;
     }
-    itemList = new String[maxItems];
+    itemList = new PlanItem[maxItems];
     itemCount = 0;
     currentItem = 0;
     Debug.Info("TFTMenu initialized");
@@ -19,7 +19,7 @@ TFTMenu::TFTMenu(TFT_eSPI *tftInstance, int maxItemCount) : tft(tftInstance), ma
 TFTMenu::TFTMenu(TFT_eSPI *tftInstance, TFT_eSprite* sprite, int maxItemCount)
     : tft(tftInstance), pSpr(sprite), maxItems(maxItemCount), ownsSprite(false)
 {
-    itemList = new String[maxItems];
+    itemList = new PlanItem[maxItems];
     itemCount = 0;
     currentItem = 0;
     Debug.Info("TFTMenu initialized with external sprite");
@@ -51,7 +51,7 @@ void TFTMenu::setWindowPosition(int _x, int _y, int _w, int _h){
 }
 
 
-void TFTMenu::addItem(String item){
+void TFTMenu::addItem(PlanItem item){
     if (itemCount < maxItems) {
         itemList[itemCount++] = item;
     } else {
@@ -63,7 +63,7 @@ void TFTMenu::addItem(String item){
 void TFTMenu::clearItemList() {
 
     for (int i = 0; i < itemCount; i++) {
-        itemList[i] = "";
+        itemList[i] = PlanItem();
     }
     itemCount = 0;
 }
@@ -106,7 +106,7 @@ bool TFTMenu::showMenu(int pageIndex, uint32_t color, uint32_t bgColor){
         return false;
     }
 
-    // configure TextWrite to draw into the sprite
+
     Text.setSprite(pSpr);
     Text.setTFTClass(nullptr);
 
@@ -116,18 +116,17 @@ bool TFTMenu::showMenu(int pageIndex, uint32_t color, uint32_t bgColor){
         if(currentItem == j){
             pSpr->fillRect(x+1, y + 20 * j + 1, width - 2, 19, color);
             if(i < itemCount){
-                Text.WriteText(fontFile, itemList[i], x + 2, itemY, bgColor);
+                Text.WriteText(fontFile, itemList[i].name, x + 2, itemY, bgColor, true, TFT_BLACK);
             }
         }else{
             if(i < itemCount){
-                Text.WriteText(fontFile, itemList[i], x + 2, itemY, color, false, bgColor);
+                Text.WriteText(fontFile, itemList[i].name, x + 2, itemY, color, false, bgColor);
             }
         }
     }
 
     fontFile.close();
     pSpr->pushSprite(0, 0);
-    // restore TextWrite for direct TFT drawing
     Text.setSprite(nullptr);
     Text.setTFTClass(tft);
     return true;

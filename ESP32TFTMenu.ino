@@ -80,6 +80,7 @@ TFT_eSPI tft;
 TFT_eSprite spr(&tft);
 ESP32Time rtc;
 AsyncWebServer server(80);
+File uploadFile;
 TFTMenu menu(&tft, &spr, 50);
 
 enum SystemState {
@@ -87,7 +88,8 @@ enum SystemState {
   Error,
   Screensave,
   Normal,
-  Menu
+  Menu,
+  MoreInfo
 };
 
 struct JsonRequestBody {
@@ -96,14 +98,6 @@ struct JsonRequestBody {
   size_t receivedSize = 0;
 };
 
-struct PlanItem {
-  String name;
-  time_t startTime;
-  long durationMinutes;
-  time_t endTime;
-  String info;
-  String id;
-};
 
 void setupTFT();
 void showSetupScreen();
@@ -136,7 +130,7 @@ void sortJsonArrayByVariantQuick(JsonArray jsonArray, bool (*comparator)(JsonVar
 bool planListComparator(JsonVariant a, JsonVariant b);
 int insertIntoSortedJsonArray(JsonArray sortedArray, JsonVariant newElement, bool (*comparator)(JsonVariant a, JsonVariant b)) ;
 void preSortPlanList();
-
+void moreInfoPage(PlanItem plan);
 void buzzer_alarm_task(void *parameter) {
   // 任务循环
   while (true) {
@@ -193,7 +187,7 @@ void setup() {
   );
 
   setupWifi();
-  //setupOTA();
+  setupOTA();
   syncNTPTime();
   setupWebServer();
   preSortPlanList();
@@ -223,13 +217,14 @@ void setupTFT() {
 }
 
 void showSetupScreen() {
-  tft.fillScreen(TFT_BLACK);
+  spr.fillSprite(TFT_BLACK);
   File file = openSDFile("/HZK16");
   if (!file) {
     Debug.Error("read HZK16 ERROR");
   }
   Text.WriteText(file, "正在启动", 20, 20, TFT_WHITE);
   file.close();
+  spr.pushSprite(0, 0);
 }
 
 void setupWifi() {
@@ -482,6 +477,50 @@ void setupWebServer() {
     request->send(200, "json", "{ code: 200, message: '计划删除成功' }");
   });
 
+  server.on("/upload", HTTP_POST,
+    [](AsyncWebServerRequest *request) {
+      if (uploadFile) {
+        uploadFile.close();
+        uploadFile = File();
+        request->send(200, "text/plain", "文件上传并更新成功！");
+        Debug.Debug("文件上传完成！");
+        preSortPlanList();
+      } else {
+        request->send(400, "text/plain", "文件上传失败！");
+      }
+    },
+    [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+      if (!index) {
+        Debug.Debug("开始上传文件：");
+        Debug.Debug(filename);
+        String filePath = "/" + filename;
+        if (SD.exists(filename))
+        {
+          Debug.Debug("删除旧文件：");
+          Debug.Debug(filename);
+          if (!SD.remove(filename))
+          {
+            Debug.Debug("旧文件删除失败！");
+          }
+        }
+        uploadFile = SD.open(filePath, FILE_WRITE);
+        if (!uploadFile) {
+          Debug.Warning("文件打开失败，无法写入！");
+          return;
+        }
+      }
+
+      if (len > 0 && uploadFile) {
+        uploadFile.write(data, len);
+        Debug.Debug("已接收：%u bytes\r", index + len);
+      }
+
+      if (final && uploadFile) {
+        Debug.Debug("\n文件总大小：%u bytes\n", index + len);
+      }
+    }
+  );
+
   server.onNotFound([](AsyncWebServerRequest *request) {
     Serial.printf("404错误 - 请求方法：%s，请求路径：%s\n",
                   request->methodToString(), request->url().c_str());
@@ -502,11 +541,10 @@ void setupOTA() {
       }
 
       Serial.println("Start updating " + type);
+      server.end();
     })
     .onEnd([]() {
       Serial.println("\nEnd");
-      Serial.println("restart system");
-      esp_restart();
     })
     .onProgress([](unsigned int progress, unsigned int total) {
       Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
@@ -631,6 +669,17 @@ void renderTFT() {
   }
   if (sysState == SystemState::Menu) {
     doRenderMenu();
+  }
+  if (sysState == SystemState::MoreInfo){
+    if (!buttonQueue.isEmpty())
+    {
+      if (buttonQueue.pop() == ButtonName::MIDDLE_BUTTON)
+      {
+        sysState = SystemState::Menu;
+        buttonQueue.clear();
+        MenuChanged = true;
+      }
+    }
   }
 }
 
@@ -782,6 +831,11 @@ void doRenderMenu() {
       promptTone();
       MenuChanged = true;
     }
+    if(currentButton == ButtonName::MIDDLE_BUTTON){
+      moreInfoPage(menu.getCurrentItem());
+      sysState = SystemState::MoreInfo;
+      return;
+    }
   }
   if (MenuChanged) {
     menu.clearItemList();
@@ -797,12 +851,20 @@ void doRenderMenu() {
     jsonFile.close();
     if (error1) {
       Debug.Error("解析JSON文件错误");
-      menu.addItem("解析JSON文件错误");
     }
     serializeJsonPretty(doc["planList"], Serial);
     Debug.Debug(String(doc["planList"].size()));
-    for (int i = 0; i < doc["planList"].size(); i++) {
-      menu.addItem(doc["planList"][i]["name"]);
+    for (int i = 0; i < doc["planList"].size(); i++)
+    {
+      String dateS = doc["planList"][i]["date"].as<String>();
+      String bS = doc["planList"][i]["beginTime"].as<String>();
+      String eS = doc["planList"][i]["endTime"].as<String>();
+      time_t startTime = stringToTime(dateS, bS);
+      time_t endTime = stringToTime(dateS, eS);
+
+      long durationMinutes = doc["planList"][i]["durationMinutes"].as<long>();
+      Serial.printf("PlanCheck:%ld-%ld curr:%ld\n", (long)startTime, (long)endTime, (long)time);
+      menu.addItem({doc["planList"][i]["name"].as<String>(), startTime, durationMinutes, endTime, doc["planList"][i]["description"].as<String>(), doc["planList"][i]["id"].as<String>()});
     }
 
     menu.showMenu(menuPageIndex, TFT_BLUE, TFT_BLACK);
@@ -1041,4 +1103,42 @@ void preSortPlanList()
   serializeJsonPretty(fileDoc, jsonFile);
   jsonFile.close();
   preSortOK = true;
+}
+
+void moreInfoPage(PlanItem plan)
+{
+  spr.fillSprite(TFT_BLACK);
+  Text.setSprite(&spr);
+  File fontFile = openSDFile("/HZK16");
+  Text.WriteText(fontFile, "名称：", 3, 3, TFT_WHITE);
+  Text.WriteText(fontFile, plan.name, 52, 3, TFT_WHITE);
+  Text.WriteText(fontFile, "开始时间：", 3, 20, TFT_WHITE);
+  {
+    String time;
+    time_t timestamp = plan.startTime;
+    struct tm *tmpPtr = localtime(&timestamp);
+    struct tm timeinfo;
+    if (tmpPtr)
+      memcpy(&timeinfo, tmpPtr, sizeof(struct tm));
+    else
+      memset(&timeinfo, 0, sizeof(struct tm));
+    time = (timeinfo.tm_hour < 10 ? "0" + String(timeinfo.tm_hour) : String(timeinfo.tm_hour)) + ":" + (timeinfo.tm_min < 10 ? "0" + String(timeinfo.tm_min) : String(timeinfo.tm_min));
+    Text.WriteText(fontFile, time, 84, 20, TFT_WHITE);
+  }
+  Text.WriteText(fontFile, "结束时间：", 3, 40, TFT_WHITE);
+  {
+    String time;
+    time_t timestamp = plan.endTime;
+    struct tm *tmpPtr = localtime(&timestamp);
+    struct tm timeinfo;
+    if (tmpPtr)
+      memcpy(&timeinfo, tmpPtr, sizeof(struct tm));
+    else
+      memset(&timeinfo, 0, sizeof(struct tm));
+    time = (timeinfo.tm_hour < 10 ? "0" + String(timeinfo.tm_hour) : String(timeinfo.tm_hour)) + ":" + (timeinfo.tm_min < 10 ? "0" + String(timeinfo.tm_min) : String(timeinfo.tm_min));
+    Text.WriteText(fontFile, time, 84, 40, TFT_WHITE);
+  }
+  Text.WriteText(fontFile, "备注：", 3, 60, TFT_WHITE);
+  Text.WriteText(fontFile, plan.info, 51, 60, TFT_WHITE);
+  spr.pushSprite(0, 0);
 }
