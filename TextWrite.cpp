@@ -52,6 +52,10 @@ void TextWrite::WriteText(File &fontFile, String text, int x, int y, uint16_t co
       Serial.println(String(i) + ":" + units[i].content + "\n类型" + String(units[i].type) + "\n在(x,y)" + String(charX) + ',' + String(charY));
       displayChinese(fontFile, charX, charY, GB.get(units[i].content), color, noneBg, bgcolor);
       charX += units[i].content.length() / 3 * 16;
+      if(charX >= 160){
+        charY += 16;
+        charX = (charX - 160 + 15) / 16;
+      }
     } else {
       Serial.println(String(i) + ":" + units[i].content + "\n类型" + String(units[i].type) + "\n在(x,y)" + String(charX) + ',' + String(charY));
       _setTextColor(tft, sprite, color, bgcolor, !noneBg);
@@ -75,6 +79,9 @@ void TextWrite::WriteText(File &fontFile, String text, int x, int y, uint16_t co
 void TextWrite::displayChinese(File &fontFile, int x, int y, String chStr, uint16_t color, bool noneBg, uint16_t bgcolor) {
   int strLen = chStr.length();
 
+  int charOffsetX = -16;
+  int charOffsetY = 0;
+
   for (int i = 0; i < strLen; i += 2) {
     uint8_t codeHigh = chStr[i];
     uint8_t codeLow = chStr[i + 1];
@@ -84,18 +91,22 @@ void TextWrite::displayChinese(File &fontFile, int x, int y, String chStr, uint1
     uint8_t dotMatrix[32];
     fontFile.seek(offset);
     fontFile.read(dotMatrix, 32);
+
+    charOffsetX += 16;
+    Debug.Debug("charOffsetX = %d charOffsetY = %d", charOffsetX, charOffsetY);
+    if(x + charOffsetX + 16 >= 160){
+      charOffsetY += 16; 
+      charOffsetX = 0;
+    }
+
     for (int row = 0; row < 16; row++) {
       uint8_t dotHigh = dotMatrix[row * 2];
       uint8_t dotLow = dotMatrix[row * 2 + 1];
 
       for (int col = 0; col < 16; col++) {
-
-        int charOffsetX = (i / 2) * 16;
-        int charOffsetY = 0;
-
         uint16_t pixelX = x + charOffsetX + col, pixelY = y + charOffsetY + row;
 
-        if (pixelX >= TFT_HEIGHT || pixelY >= TFT_WIDTH)
+        if (pixelX >= TFT_HEIGHT )
           continue;
 
         bool isLight = false;
