@@ -80,6 +80,7 @@ TFT_eSPI tft;
 TFT_eSprite spr(&tft);
 ESP32Time rtc;
 AsyncWebServer server(80);
+File uploadFile;
 TFTMenu menu(&tft, &spr, 50);
 
 enum SystemState {
@@ -482,6 +483,50 @@ void setupWebServer() {
     }
     request->send(200, "json", "{ code: 200, message: '计划删除成功' }");
   });
+
+  server.on("/upload", HTTP_POST,
+    [](AsyncWebServerRequest *request) {
+      if (uploadFile) {
+        uploadFile.close();
+        uploadFile = File();
+        request->send(200, "text/plain", "文件上传并更新成功！");
+        Debug.Debug("文件上传完成！");
+        preSortPlanList();
+      } else {
+        request->send(400, "text/plain", "文件上传失败！");
+      }
+    },
+    [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+      if (!index) {
+        Debug.Debug("开始上传文件：");
+        Debug.Debug(filename);
+        String filePath = "/" + filename;
+        if (SD.exists(filename))
+        {
+          Debug.Debug("删除旧文件：");
+          Debug.Debug(filename);
+          if (!SD.remove(filename))
+          {
+            Debug.Debug("旧文件删除失败！");
+          }
+        }
+        uploadFile = SD.open(filePath, FILE_WRITE);
+        if (!uploadFile) {
+          Debug.Warning("文件打开失败，无法写入！");
+          return;
+        }
+      }
+
+      if (len > 0 && uploadFile) {
+        uploadFile.write(data, len);
+        Debug.Debug("已接收：%u bytes\r", index + len);
+      }
+
+      if (final && uploadFile) {
+        Debug.Debug("\n文件总大小：%u bytes\n", index + len);
+      }
+    }
+  );
 
   server.onNotFound([](AsyncWebServerRequest *request) {
     Serial.printf("404错误 - 请求方法：%s，请求路径：%s\n",
