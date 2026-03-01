@@ -88,7 +88,8 @@ enum SystemState {
   Error,
   Screensave,
   Normal,
-  Menu
+  Menu,
+  MoreInfo
 };
 
 struct JsonRequestBody {
@@ -97,14 +98,6 @@ struct JsonRequestBody {
   size_t receivedSize = 0;
 };
 
-struct PlanItem {
-  String name;
-  time_t startTime;
-  long durationMinutes;
-  time_t endTime;
-  String info;
-  String id;
-};
 
 void setupTFT();
 void showSetupScreen();
@@ -137,7 +130,7 @@ void sortJsonArrayByVariantQuick(JsonArray jsonArray, bool (*comparator)(JsonVar
 bool planListComparator(JsonVariant a, JsonVariant b);
 int insertIntoSortedJsonArray(JsonArray sortedArray, JsonVariant newElement, bool (*comparator)(JsonVariant a, JsonVariant b)) ;
 void preSortPlanList();
-
+void moreInfoPage(PlanItem plan);
 void buzzer_alarm_task(void *parameter) {
   // 任务循环
   while (true) {
@@ -677,6 +670,17 @@ void renderTFT() {
   if (sysState == SystemState::Menu) {
     doRenderMenu();
   }
+  if (sysState == SystemState::MoreInfo){
+    if (!buttonQueue.isEmpty())
+    {
+      if (buttonQueue.pop() == ButtonName::MIDDLE_BUTTON)
+      {
+        sysState = SystemState::Menu;
+        buttonQueue.clear();
+        MenuChanged = true;
+      }
+    }
+  }
 }
 
 void doRenderMain() {
@@ -827,6 +831,11 @@ void doRenderMenu() {
       promptTone();
       MenuChanged = true;
     }
+    if(currentButton == ButtonName::MIDDLE_BUTTON){
+      moreInfoPage(menu.getCurrentItem());
+      sysState = SystemState::MoreInfo;
+      return;
+    }
   }
   if (MenuChanged) {
     menu.clearItemList();
@@ -842,12 +851,20 @@ void doRenderMenu() {
     jsonFile.close();
     if (error1) {
       Debug.Error("解析JSON文件错误");
-      menu.addItem("解析JSON文件错误");
     }
     serializeJsonPretty(doc["planList"], Serial);
     Debug.Debug(String(doc["planList"].size()));
-    for (int i = 0; i < doc["planList"].size(); i++) {
-      menu.addItem(doc["planList"][i]["name"]);
+    for (int i = 0; i < doc["planList"].size(); i++)
+    {
+      String dateS = doc["planList"][i]["date"].as<String>();
+      String bS = doc["planList"][i]["beginTime"].as<String>();
+      String eS = doc["planList"][i]["endTime"].as<String>();
+      time_t startTime = stringToTime(dateS, bS);
+      time_t endTime = stringToTime(dateS, eS);
+
+      long durationMinutes = doc["planList"][i]["durationMinutes"].as<long>();
+      Serial.printf("PlanCheck:%ld-%ld curr:%ld\n", (long)startTime, (long)endTime, (long)time);
+      menu.addItem({doc["planList"][i]["name"].as<String>(), startTime, durationMinutes, endTime, doc["planList"][i]["description"].as<String>(), doc["planList"][i]["id"].as<String>()});
     }
 
     menu.showMenu(menuPageIndex, TFT_BLUE, TFT_BLACK);
@@ -1086,4 +1103,42 @@ void preSortPlanList()
   serializeJsonPretty(fileDoc, jsonFile);
   jsonFile.close();
   preSortOK = true;
+}
+
+void moreInfoPage(PlanItem plan)
+{
+  spr.fillSprite(TFT_BLACK);
+  Text.setSprite(&spr);
+  File fontFile = openSDFile("/HZK16");
+  Text.WriteText(fontFile, "名称：", 3, 3, TFT_WHITE);
+  Text.WriteText(fontFile, plan.name, 52, 3, TFT_WHITE);
+  Text.WriteText(fontFile, "开始时间：", 3, 20, TFT_WHITE);
+  {
+    String time;
+    time_t timestamp = plan.startTime;
+    struct tm *tmpPtr = localtime(&timestamp);
+    struct tm timeinfo;
+    if (tmpPtr)
+      memcpy(&timeinfo, tmpPtr, sizeof(struct tm));
+    else
+      memset(&timeinfo, 0, sizeof(struct tm));
+    time = (timeinfo.tm_hour < 10 ? "0" + String(timeinfo.tm_hour) : String(timeinfo.tm_hour)) + ":" + (timeinfo.tm_min < 10 ? "0" + String(timeinfo.tm_min) : String(timeinfo.tm_min));
+    Text.WriteText(fontFile, time, 84, 20, TFT_WHITE);
+  }
+  Text.WriteText(fontFile, "结束时间：", 3, 40, TFT_WHITE);
+  {
+    String time;
+    time_t timestamp = plan.endTime;
+    struct tm *tmpPtr = localtime(&timestamp);
+    struct tm timeinfo;
+    if (tmpPtr)
+      memcpy(&timeinfo, tmpPtr, sizeof(struct tm));
+    else
+      memset(&timeinfo, 0, sizeof(struct tm));
+    time = (timeinfo.tm_hour < 10 ? "0" + String(timeinfo.tm_hour) : String(timeinfo.tm_hour)) + ":" + (timeinfo.tm_min < 10 ? "0" + String(timeinfo.tm_min) : String(timeinfo.tm_min));
+    Text.WriteText(fontFile, time, 84, 40, TFT_WHITE);
+  }
+  Text.WriteText(fontFile, "备注：", 3, 60, TFT_WHITE);
+  Text.WriteText(fontFile, plan.info, 51, 60, TFT_WHITE);
+  spr.pushSprite(0, 0);
 }
