@@ -934,7 +934,7 @@ PlanItem FindPlanbyTime(time_t time) {
     time_t endTime = stringToTime(dateS, eS);
     long durationMinutes = doc["planList"][i]["durationMinutes"].as<long>();
     Serial.printf("PlanCheck:%ld-%ld curr:%ld\n", (long)startTime, (long)endTime, (long)time);
-    if (time >= startTime && time <= endTime) {
+    if (time >= startTime && time < endTime) {
       return { doc["planList"][i]["name"].as<String>(), startTime, durationMinutes, endTime, doc["planList"][i]["description"].as<String>(), doc["planList"][i]["id"].as<String>() };
     }
   }
