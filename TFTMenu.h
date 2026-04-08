@@ -52,8 +52,9 @@ public:
   int getPageCount() const{
     return pageCount;
   }
-  PlanItem getCurrentItem(){
-    return itemList[currentItem];
+  PlanItem getCurrentItem(int page){
+    int32_t itemsPerPage = height / 20;
+    return itemList[(page - 1) * itemsPerPage + currentItem];
   }
   void itemUp();
   void itemDown();
