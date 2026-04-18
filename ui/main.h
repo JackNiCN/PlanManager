@@ -5,7 +5,7 @@
 
 class Main {
 private:
-  Config config;
+
 public:
   void doRenderMain();
 

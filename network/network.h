@@ -8,7 +8,9 @@
 class Network
 {
 private:
-  Config config;
+    ESP32Time rtc;
+    AsyncWebServer server(80);
+    File uploadFile;
 public:
     void setupWifi();
     void syncNTPTime();

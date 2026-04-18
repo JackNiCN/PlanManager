@@ -1,5 +1,21 @@
 #include "alarm.h"
 
+Alarm alarm;
+
+
+Alarm::Alarm()
+{
+    is_alarming = false;                   // 报警总开关
+    alarm_start_time = 0;         // 报警启动时间戳
+    ALARM_DURATION = 30000; // 报警持续时间（30秒）
+    BUZZER_ON_TIME = 300;             // 蜂鸣器响的时长（毫秒）
+    BUZZER_OFF_TIME = 700;            // 蜂鸣器停的时长（毫秒）
+}
+
+Alarm::~Alarm()
+{
+}
+
 void Alarm::start_alarm() {
   if (!is_alarming) { 
     is_alarming = true;

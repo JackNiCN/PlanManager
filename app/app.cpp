@@ -19,7 +19,7 @@ void App::init()
     digitalWrite(22, HIGH);
 
     xTaskCreate(
-        config.alarm.buzzer_alarm_task, // 任务函数
+        alarm.buzzer_alarm_task, // 任务函数
         "BuzzerAlarm",     // 任务名称
         2048,              // 栈大小
         NULL,              // 传递给任务的参数
@@ -38,7 +38,7 @@ void App::init()
 
 void App::loop()
 {
-    if (millis() - config.lastNtpSync > config.NTP_SYNC_INTERVAL)
+    if (millis() - lastNtpSync > NTP_SYNC_INTERVAL)
     {
         syncNTPTime();
         lastNtpSync = millis();

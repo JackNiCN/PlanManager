@@ -1,12 +1,22 @@
 #ifndef APP_H
 #define APP_H
 
+#include <Arduino.h>
 #include "../config/config.h"
+#include "../input/input.h"
+#include "../network/network.h"
+#include "../tools/alarm/alarm.h"
+#include "../tools/sd/sd.h"
+#include "../tools/text/text.h"
+#include "../ui/info.h"
+#include "../ui/main.h"
+#include "../ui/menu.h"
+#include "../ui/UIManager.h"
+
 
 class App
 {
 private:
-    Config config;
     SystemState sysState;
     String lastTimeStr;
 
