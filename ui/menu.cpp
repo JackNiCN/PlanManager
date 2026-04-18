@@ -1,4 +1,4 @@
-#include <TFTMenu.h>
+#include <menu.h>
 
 
 // create internal sprite covering the full display

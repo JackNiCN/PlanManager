@@ -12,6 +12,7 @@
 #include <SplitChinese.h>
 #include <TextWrite.h>
 #include <SD.h>
+#include <TFTMenu.h>
 
 struct PlanItem {
   String name;

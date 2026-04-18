@@ -13,7 +13,7 @@
 #include <SD.h>
 #include <UTF8ToGB2312.h>
 
-class TextWrite{
+class TextWrite {
 private:
     SplitChinese::SplitChinese spliter; 
     TFT_eSPI *tft;
